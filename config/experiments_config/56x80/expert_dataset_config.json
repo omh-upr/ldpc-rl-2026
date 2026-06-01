@@ -1,0 +1,74 @@
+{
+  "seed": 43,
+  "dataset_name": "LDPC_56x80_Curriculum_v1",
+  "total_samples": 25000,
+  "uniqueness": {
+    "scope": "dataset",
+    "ensure_unique_messages": true,
+    "ensure_unique_error_patterns": false
+  },
+  "curriculum": [
+    {
+      "phase_name": "Phase1_Foundation",
+      "num_samples": 7500,
+      "error_models": [
+        { "type": "uniform_count", "weight": 0.2, "params": { "num_errors": 0 } },
+        { "type": "uniform_count", "weight": 0.8, "params": { "num_errors": 1 } }
+      ]
+    },
+    {
+      "phase_name": "Phase2_Intermediate",
+      "num_samples": 30000,
+      "error_models": [
+        { "type": "uniform_count", "weight": 0.1,  "params": { "num_errors": 0 } },
+        { "type": "uniform_count", "weight": 0.3,  "params": { "num_errors": 1 } },
+        { "type": "uniform_count", "weight": 0.45, "params": { "num_errors": 2 } },
+        { "type": "uniform_ber",   "weight": 0.15, "params": { "ber": 0.005 } }
+      ]
+    },
+    {
+      "phase_name": "Phase3_Advanced",
+      "num_samples": 30000,
+      "error_models": [
+        { "type": "uniform_count", "weight": 0.05, "params": { "num_errors": 0 } },
+        { "type": "uniform_count", "weight": 0.10, "params": { "num_errors": 1 } },
+        { "type": "uniform_count", "weight": 0.15, "params": { "num_errors": 2 } },
+        { "type": "uniform_count", "weight": 0.50, "params": { "num_errors": 3 } },
+        { "type": "burst",          "weight": 0.15, "params": { "length": [2, 3] } },
+        { "type": "cluster",        "weight": 0.05, "params": { "radius": 8, "num_errors": 3 } }
+      ]
+    },
+    {
+      "phase_name": "Phase4_Expert",
+      "num_samples": 37500,
+      "error_models": [
+        { "type": "uniform_count", "weight": 0.01, "params": { "num_errors": 0 } },
+        { "type": "uniform_count", "weight": 0.04, "params": { "num_errors": 1 } },
+        { "type": "uniform_count", "weight": 0.10, "params": { "num_errors": 2 } },
+        { "type": "uniform_count", "weight": 0.25, "params": { "num_errors": 3 } },
+        { "type": "uniform_ber",   "weight": 0.25, "params": { "ber": 0.010 } },
+        { "type": "burst",          "weight": 0.25, "params": { "length": [3, 4, 5] } },
+        { "type": "cluster",        "weight": 0.05, "params": { "radius": 10, "num_errors": 4 } },
+        { "type": "systematic",     "weight": 0.05, "params": { "step": 16, "offset": [0, 1, 2, 3, 5] } }
+      ]
+    },
+    {
+      "phase_name": "Phase5_Master",
+      "num_samples": 45000,
+      "error_models": [
+        { "type": "uniform_count", "weight": 0.01, "params": { "num_errors": 0 } },
+        { "type": "uniform_count", "weight": 0.02, "params": { "num_errors": 1 } },
+        { "type": "uniform_count", "weight": 0.05, "params": { "num_errors": 2 } },
+        { "type": "uniform_count", "weight": 0.12, "params": { "num_errors": 3 } },
+        { "type": "uniform_count", "weight": 0.15, "params": { "num_errors": 4 } },
+        { "type": "uniform_count", "weight": 0.25, "params": { "num_errors": 5 } },
+        { "type": "uniform_ber",   "weight": 0.10, "params": { "ber": 0.010 } },
+        { "type": "burst",          "weight": 0.15, "params": { "length": [4, 5] } },
+        { "type": "cluster",        "weight": 0.05, "params": { "radius": 12, "num_errors": 5 } },
+        { "type": "cluster",        "weight": 0.05, "params": { "radius": 14, "num_errors": 5 } },
+        { "type": "systematic",     "weight": 0.05, "params": { "step": 18, "offset": [0, 1, 2, 4, 6, 8] } }
+      ]
+    }
+  ]
+}
+

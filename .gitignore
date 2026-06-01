@@ -1,0 +1,29 @@
+# Release quarantine (excluded from public repo)
+tmp/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+
+# Secrets & local tooling
+.env
+.vscode/
+.idea/
+*.swp
+
+# Generated artifacts — regenerated from configs + seeds, not committed
+# (datasets and expert replay buffers are regenerated into data/;
+#  model checkpoints also live under models/)
+models/
+results/
+experiments/
+*.pth
+*.h5
+*.hdf5
+*.pkl
+
+# Jupyter
+.ipynb_checkpoints/

@@ -1,0 +1,43 @@
+[project]
+name = "ldpc-rl-research"
+version = "1.0.0"
+description = "Deep reinforcement learning framework for LDPC decoding: a DQN agent learns bit-flipping policies via curriculum learning to correct channel errors."
+authors = [
+  { name = "Ollantay Medina" }
+]
+readme = "README.md"
+license = { file = "LICENSE" }
+keywords = ["LDPC", "error correction", "deep reinforcement learning", "DQN", "channel coding"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Communications :: Email :: Filters",
+    "Intended Audience :: Science/Research",
+    "Development Status :: 4 - Beta",
+]
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "duckdb>=1.3.2",
+    "h5py>=3.14.0",
+    "ipykernel>=6.29.5",
+    "ipywidgets>=8.1.7",
+    "matplotlib>=3.10.3",
+    "numpy>=1.24.0",
+    "pandas>=2.3.1",
+    "pyyaml>=6.0.2",
+    "scipy>=1.16.0",
+    "seaborn>=0.13.2",
+    "torch>=2.0.0",
+    "tqdm>=4.67.1",
+    "tabulate>=0.9.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/omh-upr/ldpc-rl-2026"
+Repository = "https://github.com/omh-upr/ldpc-rl-2026"
+
+[[tool.uv.index]]
+name = "pytorch-cu125"
+url = "https://download.pytorch.org/whl/cu125"

@@ -1,0 +1,18 @@
+# Funding: This material is based upon work supported by NASA under EPSCoR
+# Rapid Response Research award No. 80NSSC23M0156, "Improvements on low-density
+# parity-check (LDPC) codes and high-performance neuromorphic engineering for
+# communication systems." Any opinions, findings, and conclusions or
+# recommendations expressed in this material are those of the author(s) and do
+# not necessarily reflect the views of NASA.
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+license: MIT
+authors:
+  - family-names: Medina
+    given-names: Ollantay
+title: "LDPC Decoding via Deep Reinforcement Learning"
+version: 1.0.0
+date-released: 2026-05-31
+year: 2026
+url: "https://github.com/omh-upr/ldpc-rl-2026"
+# doi: "10.5281/zenodo.PLACEHOLDER"  # Uncomment and update after Zenodo release

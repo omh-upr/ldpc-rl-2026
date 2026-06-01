@@ -1,0 +1,946 @@
+[
+  {
+    "id": "overall_performance_summary",
+    "category": "performance_analysis",
+    "subcategory": "success_patterns",
+    "title": "Overall Performance Summary",
+    "description": "Provides the final, top-level performance metrics for the agent and all baselines.",
+    "keywords": [
+      "summary",
+      "performance",
+      "ber",
+      "success_rate"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "simple",
+    "query_template": "SELECT agent_type, CAST(SUM(CASE WHEN (terminal_reason='SUCCESS_STOP') THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS success_rate, AVG(episode_length) AS avg_steps FROM episodes WHERE episode_type = 'eval' GROUP BY agent_type ORDER BY success_rate DESC;",
+    "params": [],
+    "result_type": "dataframe",
+    "prerequisites": {
+      "min_sample_size": 30,
+      "requires_evaluation_data": true
+    }
+  },
+  {
+    "id": "frame_error_rate_summary",
+    "category": "performance_analysis",
+    "subcategory": "success_patterns",
+    "title": "Frame Error Rate Summary",
+    "description": "Provides the final, top-level error metrics for the agent and all baselines.",
+    "keywords": [
+      "summary",
+      "performance",
+      "fer",
+      "failure_rate"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "simple",
+    "query_template": "SELECT agent_type, CAST(SUM(CASE WHEN (terminal_reason!='SUCCESS_STOP') THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS frame_error_rate, AVG(episode_length) AS avg_steps FROM episodes WHERE episode_type = 'eval' GROUP BY agent_type ORDER BY frame_error_rate ASC;",
+    "params": [],
+    "result_type": "dataframe",
+    "prerequisites": {
+      "min_sample_size": 30,
+      "requires_evaluation_data": true
+    }
+  },
+  {
+    "id": "success_rate_by_phase",
+    "title": "Success Rate by Training Phase",
+    "category": "performance_analysis",
+    "subcategory": "success_patterns",
+    "description": "Plots the agent's success rate against the different phases of the training curriculum.",
+    "data_focus": "evaluation",
+    "complexity": "simple",
+    "result_type": "plot",
+    "query_template": "SELECT phase, agent_type, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS success_rate FROM episodes WHERE episode_type = 'eval' GROUP BY phase, agent_type ORDER BY phase, agent_type;",
+    "params": [],
+    "keywords": [
+      "plot",
+      "success_rate",
+      "phase",
+      "curriculum"
+    ],
+    "plot_config": {
+      "plot_type": "bar",
+      "x_axis": "phase",
+      "y_axis": "success_rate",
+      "color_by": "agent_type",
+      "title": "Agent Success Rate per Curriculum Phase",
+      "xlabel": "Training Phase",
+      "ylabel": "Success Rate (%)",
+      "color_scheme": "tab10",
+      "show_grid": true,
+      "show_legend": true,
+      "show_confidence_intervals": false,
+      "statistical_annotations": []
+    },
+    "prerequisites": {
+      "min_sample_size": 50,
+      "requires_evaluation_data": true,
+      "requires_multiple_phases": true
+    }
+  },
+  {
+    "id": "success_rate_by_error_count",
+    "title": "Success Rate by Error Count",
+    "category": "performance_analysis",
+    "subcategory": "success_patterns",
+    "description": "Shows the agent's success rate grouped by the number of initial errors (1, 2, 3, ...) for all agents during evaluation.",
+    "data_focus": "evaluation",
+    "complexity": "simple",
+    "result_type": "plot",
+    "query_template": "SELECT num_errors, agent_type, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS success_rate, COUNT(*) as total_episodes FROM episodes WHERE episode_type = 'eval' and num_errors BETWEEN 1 and 6 GROUP BY num_errors, agent_type ORDER BY num_errors, agent_type;",
+    "params": [],
+    "keywords": [
+      "plot",
+      "success_rate",
+      "error_count",
+      "num_errors",
+      "comparative"
+    ],
+    "plot_config": {
+      "plot_type": "bar",
+      "x_axis": "num_errors",
+      "y_axis": "success_rate",
+      "color_by": "agent_type",
+      "title": "Agent Success Rate by Error Count",
+      "xlabel": "Number of Errors",
+      "ylabel": "Success Rate (%)",
+      "color_scheme": "tab10",
+      "show_grid": true,
+      "show_legend": true,
+      "show_confidence_intervals": false,
+      "statistical_annotations": []
+    },
+    "prerequisites": {
+      "min_sample_size": 50,
+      "requires_evaluation_data": true
+    }
+  },
+  {
+    "id": "performance_by_error_model",
+    "category": "comparative_analysis",
+    "subcategory": "baseline_analysis",
+    "title": "Performance by Error Model and Error Count",
+    "description": "Shows success rate for different error models grouped by error count, providing detailed breakdown of agent performance across error types and complexities.",
+    "keywords": [
+      "plot",
+      "error_model",
+      "success_rate",
+      "error_count",
+      "comparative"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "moderate",
+    "query_template": "WITH error_counts AS (SELECT *, (SELECT SUM(CAST(x AS INTEGER)) FROM unnest(error_pattern) AS t(x)) as actual_errors FROM episodes WHERE episode_type = 'eval' AND error_model IS NOT NULL) SELECT CASE WHEN actual_errors = 0 THEN 'no_errors' ELSE CONCAT(error_model, '_', actual_errors, '_err') END as error_category, error_model, actual_errors as num_errors, agent_type, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS success_rate, COUNT(*) as sample_count FROM error_counts GROUP BY error_model, actual_errors, agent_type ORDER BY actual_errors, error_model, agent_type;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "bar",
+      "x_axis": "error_category",
+      "y_axis": "success_rate",
+      "color_by": "agent_type",
+      "title": "Success Rate by Error Model and Error Count",
+      "xlabel": "Error Type and Count",
+      "ylabel": "Success Rate",
+      "color_scheme": "tab10",
+      "show_grid": true,
+      "show_legend": true,
+      "show_confidence_intervals": false,
+      "statistical_annotations": [],
+      "x_tick_rotation": 45,
+      "group_by": "error_model",
+      "subgroup_by": "num_errors"
+    },
+    "prerequisites": {
+      "min_sample_size": 50,
+      "requires_evaluation_data": true
+    }
+  },
+  {
+    "id": "steps_distribution",
+    "category": "performance_analysis",
+    "subcategory": "efficiency_metrics",
+    "title": "Distribution of Episode Lengths (Steps Taken) - RL Agent",
+    "description": "Shows how many episodes took each number of steps to complete for the RL agent, grouped by success vs failure.",
+    "keywords": [
+      "steps",
+      "distribution",
+      "episodes",
+      "performance",
+      "efficiency",
+      "success"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "simple",
+    "query_template": "SELECT episode_length as steps_taken, success, COUNT(*) as count FROM episodes WHERE episode_type = 'eval' AND agent_type = 'rl' GROUP BY steps_taken, success ORDER BY steps_taken, success;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "bar",
+      "x_axis": "steps_taken",
+      "y_axis": "count",
+      "color_by": "success",
+      "title": "Distribution of Episode Lengths - RL Agent (by Success)",
+      "xlabel": "Steps Taken",
+      "ylabel": "Number of Episodes",
+      "color_scheme": "Set1",
+      "show_grid": true,
+      "show_legend": true,
+      "show_confidence_intervals": false,
+      "statistical_annotations": []
+    },
+    "prerequisites": {
+      "min_sample_size": 30,
+      "requires_evaluation_data": true
+    }
+  },
+  {
+    "id": "loss_curve",
+    "category": "training_dynamics",
+    "subcategory": "learning_progression",
+    "title": "DQN Loss Curve",
+    "description": "Plots the DQN loss over training updates.",
+    "keywords": [
+      "plot",
+      "loss",
+      "training"
+    ],
+    "data_focus": "training",
+    "complexity": "simple",
+    "query_template": "SELECT s.global_episode_id, e.original_episode_id, AVG(s.training_loss) as avg_loss FROM steps s JOIN episodes e ON s.global_episode_id = e.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_loss IS NOT NULL GROUP BY s.global_episode_id, e.original_episode_id ORDER BY e.original_episode_id;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "line",
+      "x_axis": "original_episode_id",
+      "y_axis": "avg_loss",
+      "title": "DQN Loss Curve",
+      "xlabel": "Training Episode",
+      "ylabel": "Average Loss",
+      "color_scheme": "plasma",
+      "show_grid": true,
+      "show_legend": false,
+      "show_confidence_intervals": false,
+      "show_trend_line": true,
+      "statistical_annotations": []
+    },
+    "prerequisites": {
+      "min_sample_size": 100,
+      "requires_training_data": true
+    }
+  },
+  {
+    "id": "loss_curve2",
+    "category": "training_dynamics",
+    "subcategory": "learning_progression",
+    "title": "DQN Loss Curve (Fixed - Continuous Numbering)",
+    "description": "Plots the DQN loss over training updates using continuous episode numbering (Solution 3: ROW_NUMBER approach). This fixes the episode ID reset issue between phases.",
+    "keywords": [
+      "plot",
+      "loss",
+      "training",
+      "fixed",
+      "continuous"
+    ],
+    "data_focus": "training",
+    "complexity": "moderate",
+    "query_template": "WITH ranked_episodes AS (SELECT s.global_episode_id, e.original_episode_id, e.phase, AVG(s.training_loss) as avg_loss, ROW_NUMBER() OVER (ORDER BY e.phase, e.original_episode_id) - 1 as cumulative_episode_id FROM steps s JOIN episodes e ON s.global_episode_id = e.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_loss IS NOT NULL GROUP BY s.global_episode_id, e.original_episode_id, e.phase) SELECT cumulative_episode_id, avg_loss FROM ranked_episodes ORDER BY cumulative_episode_id;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "line",
+      "x_axis": "cumulative_episode_id",
+      "y_axis": "avg_loss",
+      "title": "DQN Loss Curve (Continuous Numbering)",
+      "xlabel": "Training Episode (Continuous)",
+      "ylabel": "Average Loss",
+      "color_scheme": "plasma",
+      "show_grid": true,
+      "show_legend": false,
+      "show_confidence_intervals": false,
+      "show_trend_line": true,
+      "statistical_annotations": []
+    },
+    "prerequisites": {
+      "min_sample_size": 100,
+      "requires_training_data": true
+    }
+  },
+  {
+    "id": "curriculum_effectiveness",
+    "category": "training_dynamics",
+    "subcategory": "curriculum_learning",
+    "title": "Curriculum Learning Effectiveness",
+    "description": "Evaluates success rate progression and episode length reduction across curriculum phases during training.",
+    "keywords": [
+      "curriculum",
+      "training",
+      "success_rate",
+      "phases",
+      "progression"
+    ],
+    "data_focus": "training",
+    "complexity": "simple",
+    "query_template": "SELECT phase, COUNT(*) as total_episodes, SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_episodes, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate, AVG(episode_length) as avg_episode_length, STDDEV(episode_length) as std_episode_length FROM episodes WHERE episode_type = 'train' AND agent_type = 'agent' GROUP BY phase ORDER BY phase;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "line",
+      "x_axis": "phase",
+      "y_axis": "success_rate",
+      "title": "Success Rate Progression Across Curriculum Phases",
+      "xlabel": "Curriculum Phase",
+      "ylabel": "Success Rate (%)",
+      "color_scheme": "tab10",
+      "show_grid": true,
+      "show_legend": false,
+      "show_confidence_intervals": true,
+      "show_trend_line": true,
+      "statistical_annotations": []
+    },
+    "prerequisites": {
+      "min_sample_size": 50,
+      "requires_training_data": true,
+      "requires_multiple_phases": true
+    }
+  },
+  {
+    "id": "catastrophic_forgetting",
+    "category": "training_dynamics",
+    "subcategory": "curriculum_learning",
+    "title": "Catastrophic Forgetting Detection",
+    "description": "Analyzes performance retention on simpler error patterns when transitioning to more complex curriculum phases.",
+    "keywords": [
+      "forgetting",
+      "curriculum",
+      "retention",
+      "performance",
+      "phases"
+    ],
+    "data_focus": "training",
+    "complexity": "medium",
+    "query_template": "WITH phase_performance AS (SELECT phase, array_length(error_pattern) as error_count, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate FROM episodes WHERE episode_type = 'train' AND agent_type = 'agent' GROUP BY phase, array_length(error_pattern)) SELECT p1.phase, p1.error_count, p1.success_rate as current_phase_rate, LAG(p1.success_rate) OVER (PARTITION BY p1.error_count ORDER BY p1.phase) as previous_phase_rate, p1.success_rate - LAG(p1.success_rate) OVER (PARTITION BY p1.error_count ORDER BY p1.phase) as performance_change FROM phase_performance p1 ORDER BY p1.error_count, p1.phase;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "heatmap",
+      "x_axis": "phase",
+      "y_axis": "error_count",
+      "value_axis": "performance_change",
+      "title": "Performance Change Across Phases by Error Complexity",
+      "xlabel": "Curriculum Phase",
+      "ylabel": "Error Count",
+      "color_scheme": "RdBu_r",
+      "show_grid": false,
+      "show_legend": true,
+      "show_confidence_intervals": false,
+      "statistical_annotations": [
+        "performance_change"
+      ]
+    },
+    "prerequisites": {
+      "min_sample_size": 100,
+      "requires_training_data": true,
+      "requires_multiple_phases": true
+    }
+  },
+  {
+    "id": "exploration_evolution",
+    "category": "training_dynamics",
+    "subcategory": "exploration_strategies",
+    "title": "Exploration vs Exploitation Evolution",
+    "description": "DEPRECATED: This analysis aggregates epsilon by phase, producing limited data points for single-phase experiments. Use 'epsilon_decay_curve' for general-purpose continuous epsilon progression, or 'epsilon_decay_by_phase' for curriculum-specific per-phase analysis. This analysis is kept for backward compatibility only.",
+    "keywords": [
+      "exploration",
+      "exploitation",
+      "epsilon",
+      "q_values",
+      "confidence",
+      "deprecated"
+    ],
+    "data_focus": "training",
+    "complexity": "medium",
+    "query_template": "WITH training_progression AS (SELECT s.global_episode_id, e.phase, e.original_episode_id, AVG(s.training_epsilon) as avg_epsilon, AVG(s.q_values_std) as avg_q_variance, COUNT(DISTINCT s.action) as action_diversity FROM steps s JOIN episodes e ON s.global_episode_id = e.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_epsilon IS NOT NULL GROUP BY s.global_episode_id, e.phase, e.original_episode_id) SELECT phase, AVG(avg_epsilon) as mean_epsilon, AVG(avg_q_variance) as mean_q_variance, AVG(action_diversity) as mean_action_diversity FROM training_progression GROUP BY phase ORDER BY phase;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "line",
+      "x_axis": "phase",
+      "y_axis": "mean_epsilon",
+      "title": "Exploration Evolution Through Training Phases",
+      "xlabel": "Training Phase",
+      "ylabel": "Mean Epsilon Value",
+      "color_scheme": "viridis",
+      "show_grid": true,
+      "show_legend": false,
+      "show_confidence_intervals": false,
+      "show_trend_line": true,
+      "statistical_annotations": []
+    },
+    "prerequisites": {
+      "min_sample_size": 100,
+      "requires_training_data": true
+    }
+  },
+  {
+    "id": "epsilon_decay_curve",
+    "category": "training_dynamics",
+    "subcategory": "exploration_strategies",
+    "title": "Epsilon Decay Curve (Continuous)",
+    "description": "Tracks epsilon decay progression over continuous training episodes, independent of curriculum phases. Episodes are bucketed into groups for visualization clarity. Works with both single-phase and multi-phase experiments.",
+    "keywords": [
+      "epsilon",
+      "decay",
+      "exploration",
+      "continuous",
+      "training_progression"
+    ],
+    "data_focus": "training",
+    "complexity": "simple",
+    "query_template": "WITH ranked_episodes AS (SELECT e.global_episode_id, e.phase, e.original_episode_id, ROW_NUMBER() OVER (ORDER BY e.phase, e.original_episode_id) as continuous_episode_id, AVG(s.training_epsilon) as avg_epsilon FROM episodes e JOIN steps s ON e.global_episode_id = s.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_epsilon IS NOT NULL GROUP BY e.global_episode_id, e.phase, e.original_episode_id), bucketed AS (SELECT CAST(continuous_episode_id / 500 AS INTEGER) * 500 as episode_bucket, AVG(avg_epsilon) as mean_epsilon, MIN(avg_epsilon) as min_epsilon, MAX(avg_epsilon) as max_epsilon, COUNT(*) as episodes_in_bucket FROM ranked_episodes GROUP BY CAST(continuous_episode_id / 500 AS INTEGER)) SELECT episode_bucket, mean_epsilon, min_epsilon, max_epsilon, episodes_in_bucket FROM bucketed ORDER BY episode_bucket;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "line",
+      "x_axis": "episode_bucket",
+      "y_axis": "mean_epsilon",
+      "title": "Epsilon Decay Progression",
+      "xlabel": "Training Episode",
+      "ylabel": "Epsilon Value",
+      "color_scheme": "viridis",
+      "show_grid": true,
+      "show_legend": false,
+      "show_confidence_intervals": false,
+      "show_trend_line": false,
+      "statistical_annotations": []
+    },
+    "prerequisites": {
+      "min_sample_size": 100,
+      "requires_training_data": true
+    }
+  },
+  {
+    "id": "epsilon_decay_by_phase",
+    "category": "training_dynamics",
+    "subcategory": "exploration_strategies",
+    "title": "Epsilon Decay Within Each Phase (Curriculum)",
+    "description": "Shows epsilon decay progression within each curriculum phase separately. Episodes are renumbered 0-N within each phase to show per-phase decay patterns. Useful for analyzing epsilon reset behavior and per-phase exploration strategies in curriculum learning. Requires multiple curriculum phases.",
+    "keywords": [
+      "epsilon",
+      "decay",
+      "curriculum",
+      "phase",
+      "exploration"
+    ],
+    "data_focus": "training",
+    "complexity": "simple",
+    "query_template": "WITH phase_episodes AS (SELECT e.global_episode_id, e.phase, e.original_episode_id, ROW_NUMBER() OVER (PARTITION BY e.phase ORDER BY e.original_episode_id) - 1 as phase_episode_id, AVG(s.training_epsilon) as avg_epsilon FROM episodes e JOIN steps s ON e.global_episode_id = s.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_epsilon IS NOT NULL GROUP BY e.global_episode_id, e.phase, e.original_episode_id), bucketed AS (SELECT phase, CAST(phase_episode_id / 500 AS INTEGER) * 500 as phase_episode_bucket, AVG(avg_epsilon) as mean_epsilon, MIN(avg_epsilon) as min_epsilon, MAX(avg_epsilon) as max_epsilon, COUNT(*) as episodes_in_bucket FROM phase_episodes GROUP BY phase, CAST(phase_episode_id / 500 AS INTEGER)) SELECT phase, phase_episode_bucket, mean_epsilon, min_epsilon, max_epsilon, episodes_in_bucket FROM bucketed ORDER BY phase, phase_episode_bucket;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "line",
+      "x_axis": "phase_episode_bucket",
+      "y_axis": "mean_epsilon",
+      "color_by": "phase",
+      "title": "Epsilon Decay Per Phase (Curriculum Learning)",
+      "xlabel": "Episode Within Phase",
+      "ylabel": "Epsilon Value",
+      "color_scheme": "tab10",
+      "show_grid": true,
+      "show_legend": true,
+      "show_confidence_intervals": false,
+      "show_trend_line": false,
+      "statistical_annotations": []
+    },
+    "prerequisites": {
+      "min_sample_size": 100,
+      "requires_training_data": true,
+      "requires_multiple_phases": true
+    }
+  },
+  {
+    "id": "baseline_superiority_conditions",
+    "category": "comparative_analysis",
+    "subcategory": "agent_comparisons",
+    "title": "Baseline Superiority Conditions",
+    "description": "Identifies specific conditions where each baseline algorithm outperforms the RL agent.",
+    "keywords": [
+      "baseline",
+      "superiority",
+      "comparison",
+      "conditions",
+      "ranking"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "medium",
+    "query_template": "WITH comparative_performance AS (SELECT agent_type, array_length(error_pattern) as error_count, COUNT(*) as total_episodes, SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_episodes, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate, AVG(episode_length) as avg_steps FROM episodes WHERE episode_type = 'eval' GROUP BY agent_type, array_length(error_pattern)), agent_rankings AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY error_count ORDER BY success_rate DESC) as performance_rank FROM comparative_performance) SELECT error_count, agent_type, success_rate, avg_steps, performance_rank, LAG(success_rate) OVER (PARTITION BY error_count ORDER BY performance_rank) - success_rate as gap_to_leader FROM agent_rankings ORDER BY error_count, performance_rank;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "heatmap",
+      "x_axis": "error_count",
+      "y_axis": "agent_type",
+      "value_axis": "performance_rank",
+      "title": "Agent Performance Rankings by Error Complexity",
+      "xlabel": "Error Count",
+      "ylabel": "Agent Type",
+      "color_scheme": "RdYlBu_r",
+      "show_grid": false,
+      "show_legend": true,
+      "show_confidence_intervals": false,
+      "statistical_annotations": [
+        "performance_rank"
+      ]
+    },
+    "prerequisites": {
+      "min_sample_size": 100,
+      "requires_evaluation_data": true,
+      "requires_multiple_agents": true
+    }
+  },
+  {
+    "id": "confidence_intervals",
+    "category": "statistical_validation",
+    "subcategory": "confidence_analysis",
+    "title": "Performance Confidence Intervals",
+    "description": "Calculates 95% confidence intervals for success rates and identifies statistically significant differences.",
+    "keywords": [
+      "confidence",
+      "intervals",
+      "significance",
+      "statistics",
+      "validation"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "medium",
+    "query_template": "WITH performance_stats AS (SELECT agent_type, COUNT(*) as n, SUM(CASE WHEN success THEN 1 ELSE 0 END) as successes, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate FROM episodes WHERE episode_type = 'eval' GROUP BY agent_type) SELECT agent_type, n, successes, success_rate, success_rate - 1.96 * SQRT(success_rate * (1 - success_rate) / n) as ci_lower, success_rate + 1.96 * SQRT(success_rate * (1 - success_rate) / n) as ci_upper, 1.96 * SQRT(success_rate * (1 - success_rate) / n) as margin_of_error FROM performance_stats WHERE n >= 30 ORDER BY success_rate DESC;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "bar",
+      "x_axis": "agent_type",
+      "y_axis": "success_rate",
+      "error_bars": "margin_of_error",
+      "title": "Success Rates with 95% Confidence Intervals",
+      "xlabel": "Agent Type",
+      "ylabel": "Success Rate (%)",
+      "color_scheme": "Set2",
+      "show_grid": true,
+      "show_legend": false,
+      "show_confidence_intervals": true,
+      "statistical_annotations": [
+        "ci_lower",
+        "ci_upper"
+      ]
+    },
+    "prerequisites": {
+      "min_sample_size": 30,
+      "requires_evaluation_data": true
+    }
+  },
+  {
+    "id": "curriculum_phase_efficiency",
+    "category": "training_dynamics",
+    "subcategory": "curriculum_learning",
+    "title": "Average Episode Steps per Curriculum Phase",
+    "description": "Shows the average number of steps required to complete episodes during each curriculum phase of training, indicating learning efficiency progression.",
+    "keywords": [
+      "curriculum",
+      "phase",
+      "episode_steps",
+      "efficiency",
+      "training"
+    ],
+    "data_focus": "training",
+    "complexity": "simple",
+    "query_template": "SELECT phase, COUNT(*) as total_episodes, AVG(episode_length) as avg_episode_steps, STDDEV(episode_length) as std_episode_steps, MIN(episode_length) as min_steps, MAX(episode_length) as max_steps FROM episodes WHERE episode_type = 'train' AND agent_type = 'agent' GROUP BY phase ORDER BY phase;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "bar",
+      "x_axis": "phase",
+      "y_axis": "avg_episode_steps",
+      "error_bars": "std_episode_steps",
+      "title": "Average Episode Steps per Curriculum Phase",
+      "xlabel": "Curriculum Phase",
+      "ylabel": "Average Episode Steps",
+      "color_scheme": "viridis",
+      "show_grid": true,
+      "show_legend": false,
+      "show_confidence_intervals": true,
+      "statistical_annotations": []
+    },
+    "prerequisites": {
+      "min_sample_size": 50,
+      "requires_training_data": true,
+      "requires_multiple_phases": true
+    }
+  },
+  {
+    "id": "curriculum_phase_total_steps",
+    "category": "training_dynamics",
+    "subcategory": "curriculum_learning",
+    "title": "Total Steps per Curriculum Phase",
+    "description": "Shows the total number of training steps accumulated during each curriculum phase, providing insight into training workload distribution.",
+    "keywords": [
+      "curriculum",
+      "phase",
+      "total_steps",
+      "training_volume",
+      "workload"
+    ],
+    "data_focus": "training",
+    "complexity": "simple",
+    "query_template": "SELECT phase, COUNT(*) as total_episodes, SUM(episode_length) as total_steps, AVG(episode_length) as avg_episode_steps, MIN(episode_length) as min_steps, MAX(episode_length) as max_steps FROM episodes WHERE episode_type = 'train' AND agent_type = 'agent' GROUP BY phase ORDER BY phase;",
+    "params": [],
+    "result_type": "dataframe",
+    "prerequisites": {
+      "min_sample_size": 50,
+      "requires_training_data": true,
+      "requires_multiple_phases": true
+    }
+  },
+  {
+    "id": "performance_variance",
+    "category": "statistical_validation",
+    "subcategory": "variance_studies",
+    "title": "Performance Variance Analysis",
+    "description": "Analyzes performance variance and stability across different experimental conditions using coefficient of variation.",
+    "keywords": [
+      "variance",
+      "stability",
+      "coefficient",
+      "variation",
+      "consistency"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "medium",
+    "query_template": "WITH episode_performance AS (SELECT agent_type, array_length(error_pattern) as error_count, success, episode_length FROM episodes WHERE episode_type = 'eval'), variance_stats AS (SELECT agent_type, error_count, COUNT(*) as n_episodes, AVG(CAST(success AS REAL)) as mean_success_rate, STDDEV(CAST(success AS REAL)) as success_rate_stddev, AVG(episode_length) as mean_episode_length, STDDEV(episode_length) as episode_length_stddev FROM episode_performance GROUP BY agent_type, error_count HAVING COUNT(*) >= 10) SELECT agent_type, error_count, n_episodes, mean_success_rate, success_rate_stddev, CASE WHEN mean_success_rate > 0 THEN success_rate_stddev / mean_success_rate ELSE NULL END as success_cv, mean_episode_length, episode_length_stddev, episode_length_stddev / mean_episode_length as length_cv FROM variance_stats ORDER BY agent_type, error_count;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "scatter",
+      "x_axis": "mean_success_rate",
+      "y_axis": "success_cv",
+      "color_by": "agent_type",
+      "size_by": "n_episodes",
+      "title": "Performance Stability: Success Rate vs Coefficient of Variation",
+      "xlabel": "Mean Success Rate",
+      "ylabel": "Coefficient of Variation (Stability)",
+      "color_scheme": "tab10",
+      "show_grid": true,
+      "show_legend": true,
+      "show_confidence_intervals": false,
+      "statistical_annotations": [
+        "stability_threshold"
+      ]
+    },
+    "prerequisites": {
+      "min_sample_size": 50,
+      "requires_evaluation_data": true
+    }
+  },
+  {
+    "id": "reward_distribution_by_phase",
+    "category": "performance_analysis",
+    "subcategory": "reward_analysis",
+    "title": "Reward Distribution by Curriculum Phase",
+    "description": "Calculates the distribution of final episode rewards for each agent, grouped by curriculum phase. Provides statistics (min, percentiles, max) suitable for generating boxplots to compare reward distributions across agents and phases.",
+    "keywords": [
+      "reward",
+      "distribution",
+      "phase",
+      "curriculum",
+      "boxplot",
+      "percentile"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "simple",
+    "query_template": "WITH episode_rewards AS (SELECT e.phase, e.agent_type, SUM(s.reward) as total_reward FROM episodes e JOIN steps s ON e.global_episode_id = s.global_episode_id WHERE e.episode_type = 'eval' GROUP BY e.global_episode_id, e.phase, e.agent_type) SELECT phase, agent_type, MIN(total_reward) as min_reward, PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY total_reward) as p25_reward, AVG(total_reward) as avg_reward, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY total_reward) as median_reward, PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY total_reward) as p75_reward, MAX(total_reward) as max_reward, COUNT(*) as num_episodes FROM episode_rewards GROUP BY phase, agent_type ORDER BY phase, agent_type;",
+    "params": [],
+    "result_type": "dataframe",
+    "plot_config": {},
+    "prerequisites": {
+      "min_sample_size": 100,
+      "requires_evaluation_data": true,
+      "requires_multiple_phases": true
+    }
+  },
+  {
+    "id": "syndrome_trajectory",
+    "category": "performance_analysis",
+    "subcategory": "state_evolution",
+    "title": "Syndrome Weight Evolution Through Episodes",
+    "description": "Tracks syndrome weight trajectories through normalized episode progress, stratified by success vs failure. Shows mean values with confidence intervals to reveal whether syndrome decreases monotonically as the agent executes actions. Lower syndrome weight indicates fewer violated parity checks.",
+    "keywords": [
+      "trajectory",
+      "syndrome",
+      "evolution",
+      "success",
+      "failure",
+      "monotonic",
+      "parity_checks"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "medium",
+    "query_template": "WITH trajectory_data AS (SELECT s.global_episode_id, e.success, e.agent_type, e.episode_length, s.step_number, s.syndrome_weight, s.step_number * 1.0 / e.episode_length as normalized_progress FROM steps s JOIN episodes e ON s.global_episode_id = e.global_episode_id WHERE e.episode_type = 'eval') SELECT agent_type, success, ROUND(normalized_progress * 10) / 10 as progress_decile, COUNT(*) as data_points, AVG(syndrome_weight) as avg_syndrome_weight, STDDEV(syndrome_weight) as std_syndrome_weight, MIN(syndrome_weight) as min_syndrome_weight, MAX(syndrome_weight) as max_syndrome_weight FROM trajectory_data GROUP BY agent_type, success, ROUND(normalized_progress * 10) / 10 ORDER BY agent_type, success, progress_decile;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "line",
+      "x_axis": "progress_decile",
+      "y_axis": "avg_syndrome_weight",
+      "color_by": "success",
+      "group_by": "agent_type",
+      "title": "Syndrome Weight Evolution: Success vs Failure Trajectories",
+      "xlabel": "Normalized Episode Progress",
+      "ylabel": "Average Syndrome Weight",
+      "color_scheme": "Set1",
+      "show_grid": true,
+      "show_legend": true,
+      "show_confidence_intervals": true,
+      "statistical_annotations": [
+        "monotonicity"
+      ]
+    },
+    "prerequisites": {
+      "min_sample_size": 200,
+      "requires_evaluation_data": true
+    }
+  },
+  {
+    "id": "penalty_trajectory",
+    "category": "performance_analysis",
+    "subcategory": "state_evolution",
+    "title": "Penalty Sum Evolution Through Episodes",
+    "description": "Tracks penalty sum trajectories through normalized episode progress, stratified by success vs failure. Shows mean values with confidence intervals to reveal how penalties evolve as the agent takes actions. Penalties indicate bits that have been identified as problematic and guide the agent's bit-flipping decisions.",
+    "keywords": [
+      "trajectory",
+      "penalty",
+      "evolution",
+      "success",
+      "failure",
+      "bit_flipping"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "medium",
+    "query_template": "WITH trajectory_data AS (SELECT s.global_episode_id, e.success, e.agent_type, e.episode_length, s.step_number, s.penalty_sum, s.step_number * 1.0 / e.episode_length as normalized_progress FROM steps s JOIN episodes e ON s.global_episode_id = e.global_episode_id WHERE e.episode_type = 'eval') SELECT agent_type, success, ROUND(normalized_progress * 10) / 10 as progress_decile, COUNT(*) as data_points, AVG(penalty_sum) as avg_penalty_sum, STDDEV(penalty_sum) as std_penalty_sum, MIN(penalty_sum) as min_penalty_sum, MAX(penalty_sum) as max_penalty_sum FROM trajectory_data GROUP BY agent_type, success, ROUND(normalized_progress * 10) / 10 ORDER BY agent_type, success, progress_decile;",
+    "params": [],
+    "result_type": "plot",
+    "plot_config": {
+      "plot_type": "line",
+      "x_axis": "progress_decile",
+      "y_axis": "avg_penalty_sum",
+      "color_by": "success",
+      "group_by": "agent_type",
+      "title": "Penalty Sum Evolution: Success vs Failure Trajectories",
+      "xlabel": "Normalized Episode Progress",
+      "ylabel": "Average Penalty Sum",
+      "color_scheme": "Set1",
+      "show_grid": true,
+      "show_legend": true,
+      "show_confidence_intervals": true,
+      "statistical_annotations": []
+    },
+    "prerequisites": {
+      "min_sample_size": 200,
+      "requires_evaluation_data": true
+    }
+  },
+  {
+    "id": "steps_distribution_training",
+    "category": "training_dynamics",
+    "subcategory": "learning_progression",
+    "title": "Distribution of Episode Lengths - Training Episodes",
+    "description": "Shows how many training episodes took each number of steps to complete, grouped by success vs failure. Includes success and failure rates to identify step-count patterns during training.",
+    "keywords": [
+      "steps",
+      "distribution",
+      "training",
+      "episodes",
+      "success_rate",
+      "failure_rate"
+    ],
+    "data_focus": "training",
+    "complexity": "simple",
+    "query_template": "SELECT episode_length AS time_steps, COUNT(*) AS total_episodes, SUM(CASE WHEN success = true THEN 1 ELSE 0 END) AS successful, SUM(CASE WHEN success = false THEN 1 ELSE 0 END) AS failed, ROUND(100.0 * SUM(CASE WHEN success = true THEN 1 ELSE 0 END) / COUNT(*), 2) AS success_rate_pct, ROUND(100.0 * SUM(CASE WHEN success = false THEN 1 ELSE 0 END) / COUNT(*), 2) AS failure_rate_pct FROM episodes WHERE episode_type = 'train' GROUP BY episode_length ORDER BY episode_length;",
+    "params": [],
+    "result_type": "dataframe",
+    "prerequisites": {
+      "min_sample_size": 100,
+      "requires_training_data": true
+    }
+  },
+  {
+    "id": "training_error_distribution",
+    "category": "training_dynamics",
+    "subcategory": "curriculum_learning",
+    "title": "Training Episodes Distribution by Error Count",
+    "description": "Shows the distribution of training episodes grouped by the number of initial errors (0-7+), providing insight into the curriculum learning strategy and error complexity distribution during training. Ignores error patterns and focuses solely on error count.",
+    "keywords": [
+      "training",
+      "error_count",
+      "distribution",
+      "curriculum",
+      "episodes",
+      "complexity"
+    ],
+    "data_focus": "training",
+    "complexity": "simple",
+    "query_template": "SELECT num_errors, COUNT(*) as episode_count, ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) as percentage FROM episodes WHERE episode_type = 'train' GROUP BY num_errors ORDER BY num_errors;",
+    "params": [],
+    "result_type": "dataframe",
+    "prerequisites": {
+      "min_sample_size": 50,
+      "requires_training_data": true
+    }
+  },
+  {
+    "id": "evaluation_error_distribution",
+    "category": "performance_analysis",
+    "subcategory": "success_patterns",
+    "title": "Evaluation Episodes Distribution by Error Count - RL Agent",
+    "description": "Shows the distribution of evaluation episodes for the RL agent grouped by the number of initial errors (0-7+), revealing how test cases are distributed across different error complexities. Ignores error patterns and focuses solely on error count.",
+    "keywords": [
+      "evaluation",
+      "error_count",
+      "distribution",
+      "rl_agent",
+      "episodes",
+      "test_cases"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "simple",
+    "query_template": "SELECT num_errors, COUNT(*) as episode_count, ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) as percentage FROM episodes WHERE episode_type = 'eval' AND agent_type = 'rl' GROUP BY num_errors ORDER BY num_errors;",
+    "params": [],
+    "result_type": "dataframe",
+    "prerequisites": {
+      "min_sample_size": 50,
+      "requires_evaluation_data": true
+    }
+  },
+  {
+    "id": "rl_success_baseline_failure_cases",
+    "category": "comparative_analysis",
+    "subcategory": "agent_comparisons",
+    "title": "Test Cases Where RL Succeeded But Baseline Failed",
+    "description": "Lists the unique test cases (error patterns) where the RL agent successfully decoded but baseline agents failed. Shows error pattern details, complexity, curriculum phase, and comparative step counts to understand what types of errors the RL agent handles better than classical algorithms.",
+    "keywords": [
+      "rl_advantage",
+      "baseline_failure",
+      "comparative",
+      "error_patterns",
+      "success_cases"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "medium",
+    "query_template": "WITH rl_success AS (SELECT DISTINCT error_pattern, num_errors, phase, MIN(episode_length) as rl_min_steps, AVG(episode_length) as rl_avg_steps, MAX(episode_length) as rl_max_steps FROM episodes WHERE episode_type = 'eval' AND agent_type = 'rl' AND success = true GROUP BY error_pattern, num_errors, phase), baseline_failure AS (SELECT DISTINCT agent_type as baseline_agent, error_pattern, AVG(episode_length) as baseline_avg_steps FROM episodes WHERE episode_type = 'eval' AND agent_type NOT IN ('rl', 'agent') AND success = false GROUP BY agent_type, error_pattern) SELECT r.error_pattern, r.num_errors, r.phase, b.baseline_agent, ROUND(r.rl_avg_steps, 2) as rl_avg_steps, ROUND(b.baseline_avg_steps, 2) as baseline_avg_steps, r.rl_min_steps, r.rl_max_steps, ROUND(r.rl_avg_steps - b.baseline_avg_steps, 2) as step_difference FROM rl_success r INNER JOIN baseline_failure b ON r.error_pattern = b.error_pattern WHERE NOT EXISTS (SELECT 1 FROM episodes e WHERE e.episode_type = 'eval' AND e.agent_type = b.baseline_agent AND e.error_pattern = r.error_pattern AND e.success = true) ORDER BY r.num_errors DESC, b.baseline_agent, r.rl_avg_steps DESC;",
+    "params": [],
+    "result_type": "dataframe",
+    "prerequisites": {
+      "min_sample_size": 10,
+      "requires_evaluation_data": true,
+      "requires_multiple_agents": true
+    }
+  },
+  {
+    "id": "bit_error_rate_summary",
+    "category": "performance_analysis",
+    "subcategory": "error_metrics",
+    "title": "Bit Error Rate (BER) Summary",
+    "description": "Calculates the Bit Error Rate (BER) before and after decoding for each agent. BER is the ratio of incorrect bits to total bits. Initial BER compares the noisy received codeword to the original transmitted codeword. Final BER compares the decoded codeword (after applying bit flips) to the original. This metric provides a comprehensive view of decoding quality beyond frame-level success rates.",
+    "keywords": [
+      "ber",
+      "bit_error_rate",
+      "hamming",
+      "decoding_quality",
+      "error_correction"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "medium",
+    "query_template": "WITH eval_meta AS (SELECT COALESCE(MAX(array_length(original_codeword)), 128) AS n FROM episodes WHERE episode_type = 'eval'), positions AS (SELECT generate_series AS pos FROM eval_meta, generate_series(0, n - 1)), flip_counts AS (SELECT s.global_episode_id, s.action AS bit_pos_0, COUNT(*) % 2 AS flips_mod2 FROM steps s JOIN episodes e ON s.global_episode_id = e.global_episode_id WHERE e.episode_type = 'eval' AND s.action >= 0 AND s.action < array_length(e.original_codeword) GROUP BY s.global_episode_id, s.action), initial_bit_errors AS (SELECT ep.global_episode_id, ep.agent_type, array_length(ep.original_codeword) AS bit_length, CASE WHEN ep.noisy_codeword[p.pos + 1] <> ep.original_codeword[p.pos + 1] THEN 1 ELSE 0 END AS bit_error_initial FROM episodes ep CROSS JOIN positions p WHERE ep.episode_type = 'eval' AND p.pos < array_length(ep.original_codeword)), final_bit_errors AS (SELECT ep.global_episode_id, ep.agent_type, array_length(ep.original_codeword) AS bit_length, CASE WHEN ((ep.noisy_codeword[p.pos + 1] + COALESCE(fc.flips_mod2, 0)) % 2) <> ep.original_codeword[p.pos + 1] THEN 1 ELSE 0 END AS bit_error_final FROM episodes ep CROSS JOIN positions p LEFT JOIN flip_counts fc ON ep.global_episode_id = fc.global_episode_id AND p.pos = fc.bit_pos_0 WHERE ep.episode_type = 'eval' AND p.pos < array_length(ep.original_codeword)), episode_initial AS (SELECT global_episode_id, agent_type, MAX(bit_length) AS bit_length, SUM(bit_error_initial) AS hamming_initial FROM initial_bit_errors GROUP BY global_episode_id, agent_type), episode_final AS (SELECT global_episode_id, agent_type, MAX(bit_length) AS bit_length, SUM(bit_error_final) AS hamming_final FROM final_bit_errors GROUP BY global_episode_id, agent_type), per_episode AS (SELECT i.global_episode_id, i.agent_type, i.bit_length, i.hamming_initial, f.hamming_final FROM episode_initial i JOIN episode_final f ON i.global_episode_id = f.global_episode_id AND i.agent_type = f.agent_type) SELECT agent_type AS agent, SUM(hamming_initial) / SUM(CAST(bit_length AS DOUBLE)) AS BER_initial, SUM(hamming_final) / SUM(CAST(bit_length AS DOUBLE)) AS BER_final FROM per_episode GROUP BY agent_type;",
+    "params": [],
+    "result_type": "dataframe",
+    "prerequisites": {
+      "min_sample_size": 30,
+      "requires_evaluation_data": true
+    }
+  },
+  {
+    "id": "wasted_work_summary",
+    "category": "performance_analysis",
+    "subcategory": "efficiency_metrics",
+    "title": "Action Efficiency: Wasted Work Analysis",
+    "description": "Analyzes the percentage of wasted work due to repeated bit-flip actions across all successful evaluation episodes. In GF(2) arithmetic, flipping the same bit multiple times is redundant (even flips cancel out, odd flips waste all but one). Compares efficiency across all agents to identify which algorithms exhibit more strategic vs. exploratory behavior. Includes metrics for total episodes, episodes with waste, total steps, wasted steps, wasted percentage, and average wasted steps per episode.",
+    "keywords": [
+      "efficiency",
+      "wasted_work",
+      "redundancy",
+      "repeated_actions",
+      "bit_flips",
+      "agent_comparison"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "medium",
+    "query_template": "WITH repeated AS (SELECT e.global_episode_id as episode, e.agent_type, e.episode_length as len, s.action, CASE WHEN count(s.action) % 2 != 0 THEN count(s.action)-1 ELSE count(s.action) END AS times FROM episodes as e INNER JOIN steps as s ON e.global_episode_id = s.global_episode_id WHERE e.episode_type = 'eval' AND e.success = true AND s.action >= 0 AND s.action < array_length(e.original_codeword) GROUP BY e.global_episode_id, e.agent_type, e.episode_length, s.action HAVING count(s.action) > 1), repeated_net AS (SELECT episode, agent_type, len, SUM(times) as wasted FROM repeated GROUP BY episode, agent_type, len), all_successful AS (SELECT agent_type, global_episode_id as episode, episode_length as len FROM episodes WHERE episode_type = 'eval' AND success = true) SELECT a.agent_type as agent, COUNT(DISTINCT a.episode) as total_episodes, COUNT(DISTINCT r.episode) as episodes_with_waste, SUM(a.len) as total_steps, COALESCE(SUM(r.wasted), 0) as wasted_steps, ROUND(COALESCE(SUM(r.wasted), 0) / CAST(SUM(a.len) AS FLOAT), 4) as wasted_pct, ROUND(COALESCE(SUM(r.wasted), 0) / CAST(COUNT(DISTINCT a.episode) AS FLOAT), 2) as avg_wasted_per_episode FROM all_successful a LEFT JOIN repeated_net r ON a.episode = r.episode AND a.agent_type = r.agent_type GROUP BY a.agent_type ORDER BY wasted_pct DESC;",
+    "params": [],
+    "result_type": "dataframe",
+    "prerequisites": {
+      "min_sample_size": 30,
+      "requires_evaluation_data": true,
+      "requires_multiple_agents": false
+    }
+  },
+  {
+    "id": "wasted_work_unsuccessful",
+    "category": "performance_analysis",
+    "subcategory": "efficiency_metrics",
+    "title": "Action Efficiency: Wasted Work in Failed Episodes",
+    "description": "Analyzes the percentage of wasted work due to repeated bit-flip actions across all unsuccessful (failed) evaluation episodes. This metric reveals inefficiency patterns when agents fail to decode correctly - higher waste may indicate agents exhaustively trying redundant actions before giving up. Comparing with successful episode waste can identify whether failures are due to poor exploration strategy or inherent problem difficulty. In GF(2) arithmetic, flipping the same bit multiple times is redundant (even flips cancel out, odd flips waste all but one).",
+    "keywords": [
+      "efficiency",
+      "wasted_work",
+      "redundancy",
+      "repeated_actions",
+      "failed_episodes",
+      "failure_analysis"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "medium",
+    "query_template": "WITH repeated AS (SELECT e.global_episode_id as episode, e.agent_type, e.episode_length as len, s.action, CASE WHEN count(s.action) % 2 != 0 THEN count(s.action)-1 ELSE count(s.action) END AS times FROM episodes as e INNER JOIN steps as s ON e.global_episode_id = s.global_episode_id WHERE e.episode_type = 'eval' AND e.success = false AND s.action >= 0 AND s.action < array_length(e.original_codeword) GROUP BY e.global_episode_id, e.agent_type, e.episode_length, s.action HAVING count(s.action) > 1), repeated_net AS (SELECT episode, agent_type, len, SUM(times) as wasted FROM repeated GROUP BY episode, agent_type, len), all_unsuccessful AS (SELECT agent_type, global_episode_id as episode, episode_length as len FROM episodes WHERE episode_type = 'eval' AND success = false) SELECT a.agent_type as agent, COUNT(DISTINCT a.episode) as total_episodes, COUNT(DISTINCT r.episode) as episodes_with_waste, SUM(a.len) as total_steps, COALESCE(SUM(r.wasted), 0) as wasted_steps, ROUND(COALESCE(SUM(r.wasted), 0) / CAST(SUM(a.len) AS FLOAT), 4) as wasted_pct, ROUND(COALESCE(SUM(r.wasted), 0) / CAST(COUNT(DISTINCT a.episode) AS FLOAT), 2) as avg_wasted_per_episode FROM all_unsuccessful a LEFT JOIN repeated_net r ON a.episode = r.episode AND a.agent_type = r.agent_type GROUP BY a.agent_type ORDER BY wasted_pct DESC;",
+    "params": [],
+    "result_type": "dataframe",
+    "prerequisites": {
+      "min_sample_size": 30,
+      "requires_evaluation_data": true,
+      "requires_multiple_agents": false
+    }
+  },
+  {
+    "id": "rl_minsum_contingency_table",
+    "category": "comparative_analysis",
+    "subcategory": "agent_comparisons",
+    "title": "RL vs Min-Sum Expert: Performance Contingency Table",
+    "description": "Creates a 2\u00d72 contingency table comparing RL agent and Min-Sum Expert performance on identical test cases (same original codewords). Shows four categories: both succeed, RL succeeds but Min-Sum fails, RL fails but Min-Sum succeeds, and both fail. Provides episode counts and percentages for each category to identify performance agreement and divergence patterns between the learned and classical algorithms. This analysis reveals where RL provides advantages over classical decoding and where both approaches struggle.",
+    "keywords": [
+      "contingency",
+      "comparison",
+      "rl",
+      "min_sum_expert",
+      "agreement",
+      "pairwise",
+      "success_patterns"
+    ],
+    "data_focus": "evaluation",
+    "complexity": "simple",
+    "query_template": "WITH rl_episodes AS (SELECT original_codeword as codeword, success FROM episodes WHERE episode_type = 'eval' AND agent_type = 'rl'), ms_episodes AS (SELECT original_codeword as codeword, success FROM episodes WHERE episode_type = 'eval' AND agent_type = 'min_sum_expert') SELECT rl.success as rl_success, ms.success as minsum_success, COUNT(*) as episodes, ROUND(COUNT(*) * 1.0 / SUM(COUNT(*)) OVER (), 5) as percentage FROM rl_episodes as rl INNER JOIN ms_episodes as ms ON rl.codeword = ms.codeword GROUP BY rl.success, ms.success ORDER BY rl.success DESC, ms.success DESC;",
+    "params": [],
+    "result_type": "dataframe",
+    "prerequisites": {
+      "min_sample_size": 100,
+      "requires_evaluation_data": true,
+      "requires_multiple_agents": true
+    }
+  }
+]

@@ -1,0 +1,17 @@
+code_id: '56x80'
+
+dataset: 'data/ldpc_56x80_expert_dataset.h5'
+
+environment:
+  max_steps: 14
+  max_flips_vector: 7
+
+agent_type: 'omniscient'
+
+num_experiences: 50000
+
+# num_episodes: 1000
+
+output_file: 'data/56x80_omniscient_50000.pkl'
+
+agent_params: {}

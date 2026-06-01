@@ -1,0 +1,85 @@
+experiment_name: "Experiment_56x80"
+seed: 42
+device: "cuda"
+
+code_id: "56x80"
+
+# Pipeline
+run_dataset_creation: true
+run_training: true
+run_evaluation: true
+
+# Dataset and expert replay
+dataset_creation:
+  config_path: "56x80/main_dataset_config.json" # Curriculum configuration
+  output_path: "data/ldpc_56x80_main_dataset.h5"
+  test_size: 0.35
+  force_recreate: false # If true, recreates dataset even if it exists
+
+expert_experience:
+  use_pregenerated_file: true # If true, load from pregenerated_file
+  pregenerated_file: "data/56x80_omniscient_50000.pkl" # Path to pregenerated experiences
+
+# Training
+training:
+  num_epochs: 1
+  replay_buffer_size: 100000
+  batch_size: 32
+  target_update_freq: 1000
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  epsilon_decay_type: "linear"  # Options: "exponential" or "linear"
+  epsilon_decay: [0.0000138889, 0.0000056034, 0.0000026316, 0.0000011628, 0.0000002646, 0.0000004639]
+  epsilon_start: [1.0, 0.8, 0.6, 0.4, 0.2, 0.1]
+  epsilon_min: [0.3, 0.2, 0.1, 0.05, 0.05, 0.01]
+  epsilon_phase_reset: true
+  
+  network:
+    # Supported types: "SimpleMLP", "LDPCOptimizedMLP"
+    type: "LDPCOptimizedMLP"
+    dropout_rate: 0.05
+    leaky_slope: 0.01
+    hidden_dim1: 512
+
+# Evaluation
+evaluation:
+  baseline_agents:
+    - name: "random"
+      enabled: false
+    - name: "greedy"
+      enabled: true
+    - name: "simple_classical"
+      enabled: false
+    - name: "min_sum"
+      enabled: false
+    - name: "min_sum_expert"
+      enabled: true
+
+# Environment
+environment:
+  max_steps: 14 # Allows two passes over the configured flip budget.
+  max_flips_vector: 7 # Allows margin above the theoretical t=5 correction radius.
+
+# Model loading
+load_pretrained_model:
+  enabled: false               # Set to true to load a pre-trained model
+  model_path: "models/ldpc_rl_agent.pth"  # Path to pre-trained model
+  overwrite: false             # If true, overwrite the loaded model after training/distillation
+                               # If false, create new checkpoint (preserves original model)
+
+# Output paths
+output_paths:
+  results_dir: "results/"      # Directory for metrics, logs, and training data
+  models_dir: "models/"        # Directory for model checkpoints and saved models
+
+# Memory management
+memory_management:
+  training:
+    max_episodes_per_phase: 100000  # Episodes to keep in memory per curriculum phase
+    auto_flush_frequency: 50001    # Check memory every N episodes
+    enable_progressive_saving: true # Enable phase-based saving
+  
+  evaluation:
+    max_episodes_per_agent: 100000  # Episodes to keep in memory per agent evaluation
+    auto_flush_frequency: 50001     # Check memory every N episodes (less frequent)
+    enable_progressive_saving: true # Enable agent-based saving
