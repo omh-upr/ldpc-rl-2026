@@ -15,4 +15,4 @@ version: 1.0.0
 date-released: 2026-05-31
 year: 2026
 url: "https://github.com/omh-upr/ldpc-rl-2026"
-# doi: "10.5281/zenodo.PLACEHOLDER"  # Uncomment and update after Zenodo release
+doi: "10.5281/zenodo.20482543"  # Concept DOI (all versions)

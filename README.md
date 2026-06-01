@@ -1,9 +1,7 @@
 # Reinforcement Learning for LDPC Decoding
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-<!-- DOI badge: uncomment and fill in after the first Zenodo release (see PUBLICATION.md, step E).
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.PLACEHOLDER.svg)](https://doi.org/10.5281/zenodo.PLACEHOLDER)
--->
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20482543.svg)](https://doi.org/10.5281/zenodo.20482543)
 
 ## 1. Project Overview
 
