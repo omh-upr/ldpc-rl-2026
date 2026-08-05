@@ -144,7 +144,10 @@ class LDPCExperiment(ExperimentBase):
             'weight_decay': agent_cfg.get('weight_decay', 0.0),
             'epsilon_decay': agent_cfg['epsilon_decay'],
             'network_config': network_config,
-            'device': self.config.get('device')
+            'device': self.config.get('device'),
+            # Fail fast when an explicitly requested CUDA device is unavailable,
+            # rather than silently completing a full run on CPU.
+            'strict_device': self.config.get('strict_device', True)
         }
         
         # Add epsilon_start and epsilon_min if configured

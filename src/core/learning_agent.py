@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+import warnings
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Union, Optional
 from src.core.networks import SimpleMLP, LDPCOptimizedMLP
@@ -112,7 +113,8 @@ class DQNAgent(LearningAgent):
                  epsilon_decay_type="exponential",
                  network_config: Optional[Dict[str, Any]] = None,
                  weight_decay: float = 0.0,
-                 device: Optional[str] = None):
+                 device: Optional[str] = None,
+                 strict_device: bool = True):
         
         self._state_dim = state_dim
         self._action_dim = action_dim
@@ -129,7 +131,6 @@ class DQNAgent(LearningAgent):
 
         # Validate decay value makes sense for the chosen type
         if self.epsilon_decay_type == "linear" and not isinstance(self.epsilon_decay, list) and self.epsilon_decay > 0.1:
-            import warnings
             warnings.warn(
                 f"Linear epsilon_decay={self.epsilon_decay} is unusually large "
                 f"(epsilon drops by this amount per step). "
@@ -143,11 +144,32 @@ class DQNAgent(LearningAgent):
         self.training_step_count = 0
 
         if device is None:
+            # No device requested: auto-select, never an error.
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             requested_device = torch.device(device)
             if requested_device.type == "cuda" and not torch.cuda.is_available():
-                print(f"Requested device '{device}' is unavailable. Falling back to CPU.")
+                # A CUDA device was explicitly requested but is unavailable. Silently
+                # continuing on CPU produces results indistinguishable from a GPU run
+                # while taking several times longer, so surface it loudly.
+                detail = (
+                    f"Requested device '{device}' is unavailable: "
+                    f"torch.cuda.is_available() is False "
+                    f"(torch {torch.__version__}, built for CUDA {torch.version.cuda})."
+                )
+                if strict_device:
+                    raise RuntimeError(
+                        detail + " Refusing to fall back to CPU silently. Either fix the "
+                        "environment (see README section 6.1), set device: \"cpu\" "
+                        "explicitly, or set strict_device: false in the experiment config "
+                        "to allow the fallback."
+                    )
+                warnings.warn(
+                    detail + " Falling back to CPU; run times are NOT comparable to "
+                    "GPU runs.",
+                    RuntimeWarning,
+                    stacklevel=2
+                )
                 self.device = torch.device("cpu")
             else:
                 self.device = requested_device

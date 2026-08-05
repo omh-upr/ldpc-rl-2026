@@ -11,8 +11,8 @@ authors:
   - family-names: Medina
     given-names: Ollantay
 title: "LDPC Decoding via Deep Reinforcement Learning"
-version: 1.0.0
-date-released: 2026-05-31
+version: 1.0.1
+date-released: 2026-08-05
 year: 2026
 url: "https://github.com/omh-upr/ldpc-rl-2026"
 doi: "10.5281/zenodo.20482543"  # Concept DOI (all versions)

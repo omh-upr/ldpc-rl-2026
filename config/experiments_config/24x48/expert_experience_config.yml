@@ -1,4 +1,5 @@
 code_id: '24x48'
+seed: 42  # Seeds all RNGs so the generated experience file is reproducible.
 
 dataset: 'data/ldpc_24x48_expert_dataset.h5'
 

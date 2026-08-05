@@ -45,7 +45,8 @@ training:
   target_update_freq: 1000
   learning_rate: 0.0001
   weight_decay: 0.0001
-  update_frequency: 4              # Matches Full; one gradient update every 4 env steps.
+  update_frequency: 4              # Smoke test only: 1 gradient update per 4 env steps, for speed.
+                                   # All real experiments use 1 (the code default). See README 2.2.
 
   # Per-phase linear epsilon schedule sized for ~1k/1.75k/3k gradient updates per phase.
   # See notebooks/epsilon_estimations.ipynb for the derivation.

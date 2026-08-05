@@ -12,7 +12,10 @@ Usage:
 """
 
 import yaml
+import random
 import argparse
+import numpy as np
+import torch
 from pathlib import Path
 
 from src.core.ldpc_code import LDPC_Code
@@ -58,6 +61,30 @@ def load_configuration(config_path: str) -> dict:
         raise ValueError("Either 'num_experiences' or 'num_episodes' must be specified")
     
     return config
+
+
+def setup_seed(config: dict) -> int:
+    """
+    Seed all random number generators used during expert experience generation.
+
+    Mirrors BaseExperiment._setup_seed() so that a pregenerated experience file is
+    reproducible from its configuration. Without this, every invocation produces a
+    different expert replay buffer, which in turn makes any training run that seeds
+    from it irreproducible.
+
+    Args:
+        config: Configuration dictionary (uses 'seed', default 42)
+
+    Returns:
+        int: The seed that was applied.
+    """
+    seed = config.get('seed', 42)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    return seed
 
 
 def setup_components(config: dict):
@@ -214,6 +241,11 @@ Examples:
             print(f"WARNING: output_file path in config may not reflect actual agent type")
 
         print("Configuration loaded and validated")
+
+        # Seed every RNG before any component is built, so the generated
+        # experience file is reproducible from this configuration.
+        seed = setup_seed(config)
+        print(f"   Seed: {seed}")
 
         # Setup components
         ldpc_code, environment, agent, data_generator = setup_components(config)

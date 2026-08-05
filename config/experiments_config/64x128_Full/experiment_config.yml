@@ -28,7 +28,7 @@ training:
   target_update_freq: 1000
   learning_rate: 0.0001
   weight_decay: 0.0001
-  update_frequency: 4  # Perform one gradient update every N environment steps.
+  update_frequency: 1  # Perform one gradient update every N environment steps.
 
   epsilon_decay_type: "linear"  # Options: "exponential" or "linear"
   epsilon_decay: [0.0000092105, 0.0000024291, 0.0000020243, 0.0000012995, 0.0000007628, 0.0000006061]

@@ -1,4 +1,4 @@
-# Ablation with a single-phase dataset schedule and no expert replay seeding.
+# Ablation with a single-phase dataset schedule and expert replay seeding (only-expert condition).
 experiment_name: "Experiment_64x128_OnlyE"
 seed: 42
 device: "cuda"
@@ -18,7 +18,7 @@ dataset_creation:
   force_recreate: true # If true, recreates dataset even if it exists
 
 expert_experience:
-  use_pregenerated_file: false # If true, load from pregenerated_file
+  use_pregenerated_file: true # If true, load from pregenerated_file
   pregenerated_file: "data/64x128_omniscient_500000.pkl" # Path to pregenerated experiences
 
 # Training

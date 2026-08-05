@@ -1,6 +1,6 @@
 [project]
 name = "ldpc-rl-research"
-version = "1.0.0"
+version = "1.0.1"
 description = "Deep reinforcement learning framework for LDPC decoding: a DQN agent learns bit-flipping policies via curriculum learning to correct channel errors."
 authors = [
   { name = "Ollantay Medina" }
@@ -29,7 +29,7 @@ dependencies = [
     "pyyaml>=6.0.2",
     "scipy>=1.16.0",
     "seaborn>=0.13.2",
-    "torch>=2.0.0",
+    "torch>=2.6,<3.0",
     "tqdm>=4.67.1",
     "tabulate>=0.9.0",
 ]
@@ -38,6 +38,16 @@ dependencies = [
 Homepage = "https://github.com/omh-upr/ldpc-rl-2026"
 Repository = "https://github.com/omh-upr/ldpc-rl-2026"
 
-[[tool.uv.index]]
-name = "pytorch-cu125"
-url = "https://download.pytorch.org/whl/cu125"
+# NOTE ON CUDA: torch is installed from PyPI, whose Linux wheels already bundle the
+# CUDA 12 runtime (nvidia-*-cu12 packages appear in uv.lock). uv.lock pins
+# torch 2.10.0+cu128, which is the build these results were produced with.
+#
+# A previous `[[tool.uv.index]]` declaration for download.pytorch.org/whl/cu125 was
+# removed here: it was never bound to torch via `[tool.uv.sources]`, so it had no
+# effect on resolution and only implied a pin that did not exist. To genuinely pin a
+# specific CUDA build, add BOTH an index entry and:
+#     [tool.uv.sources]
+#     torch = { index = "<index-name>" }
+# and re-verify GPU availability afterwards, since it changes the resolved wheel.
+#
+# Reproduce the exact verified environment with:  uv sync --frozen

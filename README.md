@@ -65,6 +65,18 @@ The system uses YAML and JSON configuration files for complete experiment contro
 - **`config/experiments_config/<folder>/expert_experience_config.yml`**: Expert experience generation settings.
 - **`config/analysis_definitions.json`**: SQL queries and metadata for the analysis framework.
 
+#### A note on `update_frequency`
+
+`update_frequency` (under `training:` in `experiment_config.yml`) sets how many environment steps elapse between gradient updates: `1` performs one update per step, `4` one update every four steps. Raising it reduces wall-clock time roughly in proportion to the updates skipped, at the cost of **sample efficiency** — the agent learns less per environment step. The effect on *final* decoding performance is not guaranteed in either direction, since the update-to-data ratio is itself a hyperparameter and very high ratios can destabilise Q-learning.
+
+**When comparing configurations, keep `update_frequency` identical across all of them.** Every experiment config uses the code default of `1`; only `64x128_QuickStart` sets `4`, deliberately, because it is a smoke test where speed matters and convergence does not.
+
+#### Reproducibility
+
+Each `experiment_config.yml` and `expert_experience_config.yml` carries a `seed`, which is applied to Python's `random`, NumPy, and PyTorch (including CUDA) before any component is constructed. Given the same seed and configuration, dataset generation, expert experience generation, and training are reproducible.
+
+Experiments that request `device: "cuda"` fail fast if CUDA is unavailable, rather than silently completing on CPU with results that look identical but take several times longer. Set `strict_device: false` at the top level of an experiment config to allow the fallback with a warning instead.
+
 ### 2.3. Path Management
 
 All file paths are managed through a centralized `path_utils` system that detects the project root automatically and resolves paths consistently regardless of working directory.
@@ -166,7 +178,16 @@ uv sync
 ```
 
 `uv sync` installs the exact, pinned versions from the committed `uv.lock`, so the
-environment is reproducible across machines.
+environment is reproducible across machines. Use `uv sync --frozen` to fail rather than
+re-resolve if `uv.lock` and `pyproject.toml` ever drift apart.
+
+The committed `.python-version` pins CPython 3.12; `uv` downloads a matching interpreter
+automatically if the host does not have one. The pinned environment installs a CUDA-enabled
+PyTorch build — verify the GPU is visible before a long run:
+
+```bash
+PYTHONPATH=. python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
 
 ### 6.2. Smoke Test (Quick Start)
 
