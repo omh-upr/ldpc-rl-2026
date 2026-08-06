@@ -6,6 +6,67 @@ This project is archived on Zenodo. The concept DOI
 [10.5281/zenodo.20482543](https://doi.org/10.5281/zenodo.20482543) always resolves to the
 latest version; each release additionally receives its own version DOI.
 
+## [1.1.0] — 2026-08-06
+
+A performance release. Decoding behaviour, network architecture, curriculum, reward
+function and evaluation pipeline are unchanged.
+
+> **Reproducibility boundary.** Runs remain fully reproducible from the configured `seed`:
+> the same seed and configuration produce identical results. But **v1.1.0 does not reproduce
+> v1.0.x results bit-for-bit** — the replay buffer's index sampler uses a different algorithm
+> and therefore draws a different random stream. The sampling distribution is unchanged
+> (uniform, without replacement, 32 distinct indices); only the draw order differs. Anyone
+> comparing figures across versions should regenerate them rather than mixing the two.
+
+### Changed
+
+- **Replay sampling no longer costs O(buffer size).** `np.random.choice(n, k, replace=False)`
+  draws `k` items by permuting the *entire* range, so its cost scales with the buffer rather
+  than the batch. Measured for `k=32`:
+
+  | buffer size | before | after |
+  |---:|---:|---:|
+  | 50,000 | 449 µs | 3.6 µs |
+  | 500,000 | 4,518 µs | 3.6 µs |
+  | 2,500,000 | 32,403 µs | 3.6 µs |
+  | 5,000,000 | 91,701 µs | 3.6 µs |
+
+  `64x128_Full` configures a 5,000,000-entry buffer, so selecting 32 indices was costing up
+  to 91.7 ms per gradient update — far more than the update itself. `Generator.choice` uses
+  Floyd's algorithm instead: constant time, identical semantics.
+
+  This also explains why expert-seeded runs were disproportionately slow: seeding starts the
+  buffer at 500,000 entries, so sampling begins expensive.
+
+  End-to-end on `64x128_Full` (245,000 episodes, 500,000-experience expert seed):
+  **86.9 minutes, against 208–252 minutes previously** — with equivalent results
+  (92.1% RL success, matching phase-boundary behaviour).
+
+### Performance (output-identical)
+
+Each of the following was verified to produce byte-identical result files:
+
+- Metrics JSON is encoded once and written once. `json.dump()` streams through one
+  `write()` per JSON fragment — 9,022,096 calls in a profiled QuickStart run.
+- Dataset phases are read from HDF5 once and cached, rather than four single-element reads
+  plus a group lookup per sample (42,006 dataset reads for ~10,500 samples).
+- The replay buffer is backed by a ring buffer instead of a `deque`, giving O(1) random
+  indexing rather than O(n).
+- `DQNAgent.update()` collapses six CUDA synchronisations per update into one.
+- Syndrome and penalty vectors update incrementally in `step()` — a bit flip toggles only
+  the checks in one column of H — instead of running two sparse mat-vecs per action.
+
+On the smoke test these are worth ~32%; on production runs their effect is small relative to
+the sampling fix above.
+
+### Removed
+
+- The `128x256` experiment configuration. It never ran end-to-end, and README section 5 lists
+  the supported codes as 24x48, 56x80 and 64x128 — so it shipped both untested and
+  undocumented. **The matrices remain**: `data/H_128x256_dmin24.npy`,
+  `data/G_128x256_dmin24.npy`, and `code_id: "128x256"` still resolves. A tuned configuration
+  may return in a future release.
+
 ## [1.0.1] — 2026-08-05
 
 A correctness and reproducibility release. **No algorithmic or architectural changes** — the

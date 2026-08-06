@@ -167,7 +167,10 @@ class ProgressiveSaver:
     def _save_data(self, filepath: Path, data: Dict[str, Any]):
         """Save data to compressed JSON file."""
         with gzip.open(filepath, 'wt', encoding='utf-8') as f:
-            json.dump(data, f, default=self._json_serializer)
+            # Encode once, write once. json.dump() streams the document through one
+            # f.write() per JSON fragment (millions of calls on a full run), each
+            # traversing the gzip text wrapper. Output is identical either way.
+            f.write(json.dumps(data, default=self._json_serializer))
     
     def _json_serializer(self, obj):
         """Custom JSON serializer for numpy and torch objects."""

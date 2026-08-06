@@ -22,6 +22,10 @@ class RobustDataGenerator:
         self.h5_filepath = None
         self.h5_file = None
 
+        # Lazily-populated {phase_idx: (originals, noisies, errors, metas)} of in-memory
+        # numpy arrays, used by get_iterator(). See _get_phase_arrays().
+        self._phase_arrays = {}
+
         # If total_samples is defined, recalculate phase samples to be proportional
         if 'total_samples' in self.config and self.config['total_samples'] is not None:
             self._recalculate_phase_samples()
@@ -488,6 +492,39 @@ class RobustDataGenerator:
             self._phase_boundaries.append(global_offset + phase_size)
             global_offset += phase_size
 
+    def _get_phase_arrays(self, phase_idx: int):
+        """
+        Return a phase's four datasets as in-memory numpy arrays, reading each from
+        HDF5 exactly once.
+
+        Iterating a split previously performed one group lookup plus four
+        single-element HDF5 reads per sample. Each such read pays a full hyperslab
+        selection and type conversion, which dominated iteration cost. Reading whole
+        datasets once and indexing them in memory returns identical values in
+        identical order.
+
+        Memory: proportional to the phases actually visited -- roughly 410 MB for the
+        350k-sample 64x128 dataset, and about twice that for 128x256 at the same
+        sample count. Cleared by close().
+
+        Args:
+            phase_idx: 0-indexed curriculum phase.
+
+        Returns:
+            Tuple of (original_codewords, noisy_codewords, error_patterns, metadata).
+        """
+        cached = self._phase_arrays.get(phase_idx)
+        if cached is None:
+            group = self.h5_file[f'phase_{phase_idx}']
+            cached = (
+                group['original_codewords'][:],
+                group['noisy_codewords'][:],
+                group['error_patterns'][:],
+                group['metadata'][:],
+            )
+            self._phase_arrays[phase_idx] = cached
+        return cached
+
     def get_iterator(self, split_name: str) -> Iterator[Dict[str, Any]]:
         """
         Returns a memory-efficient iterator for the specified data split ('train', 'test', or 'all').
@@ -523,13 +560,17 @@ class RobustDataGenerator:
             phase_start_index = self._phase_boundaries[phase_idx-1] if phase_idx > 0 else 0
             local_idx = global_idx - phase_start_index
 
-            phase_group = self.h5_file[f'phase_{phase_idx}']
-            
+            originals, noisies, errors, metas = self._get_phase_arrays(phase_idx)
+
+            # .copy() preserves the previous semantics exactly: an HDF5 element read
+            # returned a freshly-allocated array, so callers may mutate what they get
+            # (LDPCEnvironment.reset does copy, but not every consumer is guaranteed to).
+            # Copying one row costs ~1 us against ~200 us for the HDF5 read it replaces.
             yield {
-                'original': phase_group['original_codewords'][local_idx],
-                'noisy': phase_group['noisy_codewords'][local_idx],
-                'error': phase_group['error_patterns'][local_idx],
-                'meta': phase_group['metadata'][local_idx],
+                'original': originals[local_idx].copy(),
+                'noisy': noisies[local_idx].copy(),
+                'error': errors[local_idx].copy(),
+                'meta': metas[local_idx].copy(),
                 'phase': phase_idx + 1  # 1-indexed phase number
             }
 
@@ -631,18 +672,23 @@ class RobustDataGenerator:
             phase_start_index = self._phase_boundaries[phase_idx-1] if phase_idx > 0 else 0
             local_idx = global_idx - phase_start_index
             
-            phase_group = self.h5_file[f'phase_{phase_idx}']
-            
+            originals, noisies, errors, metas = self._get_phase_arrays(phase_idx)
+
+            # .copy() preserves the previous semantics exactly: an HDF5 element read
+            # returned a freshly-allocated array, so callers may mutate what they get
+            # (LDPCEnvironment.reset does copy, but not every consumer is guaranteed to).
+            # Copying one row costs ~1 us against ~200 us for the HDF5 read it replaces.
             yield {
-                'original': phase_group['original_codewords'][local_idx],
-                'noisy': phase_group['noisy_codewords'][local_idx],
-                'error': phase_group['error_patterns'][local_idx],
-                'meta': phase_group['metadata'][local_idx],
+                'original': originals[local_idx].copy(),
+                'noisy': noisies[local_idx].copy(),
+                'error': errors[local_idx].copy(),
+                'meta': metas[local_idx].copy(),
                 'phase': phase_idx + 1  # 1-indexed phase number
             }
 
     def close(self):
         """Close the HDF5 file if open."""
+        self._phase_arrays = {}  # drop cached arrays; they belong to this file handle
         if self.h5_file:
             self.h5_file.close()
             self.h5_file = None

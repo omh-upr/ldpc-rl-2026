@@ -100,6 +100,13 @@ class LDPCEnvironment(BaseEnvironment):
         # NEW: Cached legal actions list (static for a given code)
         self._legal_actions = list(range(self.code.action_dim))
 
+        # Incidence structure of H, cached once, for the incremental syndrome and
+        # penalty updates in step(). _h_col_rows[j] holds the parity checks that bit j
+        # participates in; _h_row_cols[i] holds the bits that check i covers.
+        H = self.code.H
+        self._h_col_rows = [np.flatnonzero(H[:, j]) for j in range(self.code.n)]
+        self._h_row_cols = [np.flatnonzero(H[i, :]) for i in range(self.code.m)]
+
     def reset(self, noisy_codeword, original_codeword):
         """
         Resets the environment with noisy and original codewords.
@@ -159,13 +166,25 @@ class LDPCEnvironment(BaseEnvironment):
             # If bit went 0→1: increment, if 1→0: decrement
             self._flip_count += (1 if old_flip_value == 0 else -1)
 
-        # 3. Update state components after action
-        self.syndrome = self.code.syndrome(self.codeword)
-        self.penalty_vector = self.code.penalty_vector(self.syndrome)
-
-        # NEW: Update counters from recomputed vectors
-        self._syndrome_weight = int(np.sum(self.syndrome))
-        self._penalty_sum = int(np.sum(self.penalty_vector))
+            # 3. Update syndrome and penalty incrementally.
+            #
+            # s = H @ c (mod 2), so flipping bit `action` toggles exactly the checks
+            # in column `action` of H: s ^= H[:, action]. penalty = H.T @ s, so each
+            # toggled check i shifts penalty by +/-1 on the bits it covers. Both are
+            # exact integer identities -- bit-for-bit what a full recompute produces --
+            # but touch ~4 checks and ~32 penalty entries instead of running two
+            # sparse mat-vecs over all 512 nonzeros of H.
+            syndrome = self.syndrome
+            penalty = self.penalty_vector
+            for check in self._h_col_rows[action]:
+                delta = 1 if syndrome[check] == 0 else -1
+                syndrome[check] ^= 1
+                covered = self._h_row_cols[check]
+                penalty[covered] += delta
+                self._syndrome_weight += delta
+                self._penalty_sum += delta * covered.size
+        # STOP action leaves the codeword untouched, so the syndrome, penalty vector
+        # and their counters are all unchanged -- no recompute needed.
 
         # OLD: Compute weights via np.sum
         # new_syndrome_weight = np.sum(self.syndrome)
@@ -348,8 +367,10 @@ class LDPCEnvironment(BaseEnvironment):
             'syndrome': self.syndrome.copy() if self.syndrome is not None else None,
             'flip_vector': self.flip_vector.copy() if self.flip_vector is not None else None,
             'penalty_vector': self.penalty_vector.copy() if self.penalty_vector is not None else None,
-            'syndrome_weight': np.sum(self.syndrome) if self.syndrome is not None else None,
-            'penalty_sum': np.sum(self.penalty_vector) if self.penalty_vector is not None else None,
+            # Use the incrementally-maintained counters rather than re-summing, for
+            # consistency with get_state() and step(), which already do.
+            'syndrome_weight': self._syndrome_weight if self.syndrome is not None else None,
+            'penalty_sum': self._penalty_sum if self.penalty_vector is not None else None,
             'step_count': self.step_count,            
         }
 

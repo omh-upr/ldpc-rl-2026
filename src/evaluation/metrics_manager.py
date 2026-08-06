@@ -57,7 +57,10 @@ class MetricsManager:
         results_path = self.results_dir / f"{self.experiment_name}_{self.timestamp}.json.gz"
         with gzip.open(results_path, 'wt') as f:
             processed_data = self._preprocess_for_json(results)
-            json.dump(processed_data, f, default=self._json_serializer)
+            # Encode once, write once. json.dump() streams the document through one
+            # f.write() per JSON fragment (millions of calls on a full run), each
+            # traversing the gzip text wrapper. Output is identical either way.
+            f.write(json.dumps(processed_data, default=self._json_serializer))
         return results_path
 
     def save_training_results(self, config: dict, training_data: list) -> Path:
@@ -100,7 +103,10 @@ class MetricsManager:
         training_path = self.results_dir / f"{self.experiment_name}_{self.timestamp}_training.json.gz"
         with gzip.open(training_path, 'wt') as f:
             processed_data = self._preprocess_for_json(training_results)
-            json.dump(processed_data, f, default=self._json_serializer)
+            # Encode once, write once. json.dump() streams the document through one
+            # f.write() per JSON fragment (millions of calls on a full run), each
+            # traversing the gzip text wrapper. Output is identical either way.
+            f.write(json.dumps(processed_data, default=self._json_serializer))
         return training_path
 
     def save_evaluation_results(self, config: dict, evaluation_data: list) -> Path:
@@ -122,7 +128,10 @@ class MetricsManager:
         evaluation_path = self.results_dir / f"{self.experiment_name}_{self.timestamp}_evaluation.json.gz"
         with gzip.open(evaluation_path, 'wt') as f:
             processed_data = self._preprocess_for_json(evaluation_results)
-            json.dump(processed_data, f, default=self._json_serializer)
+            # Encode once, write once. json.dump() streams the document through one
+            # f.write() per JSON fragment (millions of calls on a full run), each
+            # traversing the gzip text wrapper. Output is identical either way.
+            f.write(json.dumps(processed_data, default=self._json_serializer))
         return evaluation_path
 
     def save_model(self, model_state_dict, model_info=None):
@@ -202,7 +211,10 @@ class MetricsManager:
         partial_path = self.results_dir / f"{self.experiment_name}_{self.timestamp}_training_phase{phase}.json.gz"
         with gzip.open(partial_path, 'wt') as f:
             processed_data = self._preprocess_for_json(partial_results)
-            json.dump(processed_data, f, default=self._json_serializer)
+            # Encode once, write once. json.dump() streams the document through one
+            # f.write() per JSON fragment (millions of calls on a full run), each
+            # traversing the gzip text wrapper. Output is identical either way.
+            f.write(json.dumps(processed_data, default=self._json_serializer))
 
         return partial_path
 
@@ -234,7 +246,10 @@ class MetricsManager:
         flush_path = self.results_dir / f"{self.experiment_name}_{self.timestamp}_training_phase{phase}_flush{flush_num}.json.gz"
         with gzip.open(flush_path, 'wt') as f:
             processed_data = self._preprocess_for_json(flush_results)
-            json.dump(processed_data, f, default=self._json_serializer)
+            # Encode once, write once. json.dump() streams the document through one
+            # f.write() per JSON fragment (millions of calls on a full run), each
+            # traversing the gzip text wrapper. Output is identical either way.
+            f.write(json.dumps(processed_data, default=self._json_serializer))
 
         return flush_path
 
@@ -263,5 +278,8 @@ class MetricsManager:
         # Save the combined data
         with gzip.open(main_training_path, 'wt') as f:
             processed_data = self._preprocess_for_json(existing_data)
-            json.dump(processed_data, f, default=self._json_serializer)
+            # Encode once, write once. json.dump() streams the document through one
+            # f.write() per JSON fragment (millions of calls on a full run), each
+            # traversing the gzip text wrapper. Output is identical either way.
+            f.write(json.dumps(processed_data, default=self._json_serializer))
     

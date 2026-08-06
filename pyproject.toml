@@ -1,6 +1,6 @@
 [project]
 name = "ldpc-rl-research"
-version = "1.0.1"
+version = "1.1.0"
 description = "Deep reinforcement learning framework for LDPC decoding: a DQN agent learns bit-flipping policies via curriculum learning to correct channel errors."
 authors = [
   { name = "Ollantay Medina" }

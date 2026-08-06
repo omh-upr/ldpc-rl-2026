@@ -75,6 +75,8 @@ The system uses YAML and JSON configuration files for complete experiment contro
 
 Each `experiment_config.yml` and `expert_experience_config.yml` carries a `seed`, which is applied to Python's `random`, NumPy, and PyTorch (including CUDA) before any component is constructed. Given the same seed and configuration, dataset generation, expert experience generation, and training are reproducible.
 
+Reproducibility holds **within** a release. Results are not comparable bit-for-bit **across** the 1.0.x and 1.1.x series: v1.1.0 changed the replay buffer's index sampler to a constant-time algorithm, which draws a different random stream. The sampling distribution is unchanged (uniform, without replacement); only the draw order differs. Regenerate figures rather than mixing results from both series — see `CHANGELOG.md`.
+
 Experiments that request `device: "cuda"` fail fast if CUDA is unavailable, rather than silently completing on CPU with results that look identical but take several times longer. Set `strict_device: false` at the top level of an experiment config to allow the fallback with a warning instead.
 
 ### 2.3. Path Management
@@ -202,7 +204,7 @@ Note: this overwrites `data/ldpc_64x128_{main,expert}_dataset.h5` if they exist 
 
 ### 6.3. Reproducing the Main Experiment
 
-The full end-to-end workflow for the flagship `64x128_Full` experiment:
+The full end-to-end workflow for the flagship `64x128_Full` experiment. It trains over 245,000 episodes across six curriculum phases and takes roughly **1.5 hours** on a single RTX 3060 Ti (8 GB), including dataset generation and evaluation against both baselines. Peak host memory is about 8.5 GB, most of it the replay buffer.
 
 ```bash
 # Step 1: Run the complete experiment (dataset creation, training, evaluation)

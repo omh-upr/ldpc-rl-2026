@@ -52,7 +52,6 @@ PYTHONPATH=. python scripts/run_experiment.py --config <path> [--output-parent-d
 - `config/experiments_config/24x48/experiment_config.yml`
 - `config/experiments_config/56x80/experiment_config.yml`
 - `config/experiments_config/64x128_Full/experiment_config.yml`
-- `config/experiments_config/128x256/experiment_config.yml`
 
 ### Notes
 
@@ -110,7 +109,7 @@ PYTHONPATH=. python scripts/run_multi_matrix_experiments.py \
 
 - `--config-folder` (required): Root folder with experiment subfolders.
 - One required selection mode:
-  - `--all-matrices`: only strict code-id-style folders (currently `24x48`, `56x80`, `128x256` in this repo).
+  - `--all-matrices`: only strict code-id-style folders (currently `24x48` and `56x80` in this repo).
   - `--all-folders`: any valid config folder (includes variants like `64x128_Full` and `64x128_NoC_NoE`).
   - `--matrices <ids...>`: explicit strict matrix folders (for example `24x48 56x80`).
   - `--folders <names...>`: explicit folder names.
@@ -196,7 +195,7 @@ Experiment configs use `code_id` to select the LDPC matrices:
 - `24x48` (`d_min=7`)
 - `56x80` (`d_min=12`)
 - `64x128` (`d_min=14`)
-- `128x256` (`d_min=24`)
+- `128x256` (`d_min=24`) - matrices only; no experiment configuration ships for this code.
 
 ### Network types
 

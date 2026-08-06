@@ -276,7 +276,7 @@ class ExperimentDiscovery:
 
     def _is_valid_code_id(self, code_id: str) -> bool:
         """
-        Validate strict code_id format (e.g., '24x48', '128x256').
+        Validate strict code_id format (e.g., '24x48', '56x80').
 
         Only matches pure 'NxM' matrix dimension folders.
         Folders with suffixes (e.g., '64x128_Full') are excluded;
@@ -995,7 +995,7 @@ Examples:
     selection_group.add_argument(
         '--all-matrices',
         action='store_true',
-        help='Run experiments from all code_id format subfolders (e.g., 64x128, 128x256)'
+        help='Run experiments from all code_id format subfolders (e.g., 24x48, 56x80)'
     )
     selection_group.add_argument(
         '--all-folders',

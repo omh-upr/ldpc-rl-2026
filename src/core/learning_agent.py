@@ -227,7 +227,10 @@ class DQNAgent(LearningAgent):
             return np.random.randint(self._action_dim)
         
         with torch.no_grad():
-            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+            # as_tensor avoids the copy FloatTensor(state) always makes; the
+            # environment already produces float32 states, so this is a view in the
+            # common case while still converting correctly for any other dtype.
+            state_tensor = torch.as_tensor(state, dtype=torch.float32).unsqueeze(0).to(self.device)
             q_values = self.network(state_tensor)
             return q_values.argmax().item()
 
@@ -294,19 +297,47 @@ class DQNAgent(LearningAgent):
             if self.epsilon > self.epsilon_min:
                 self.epsilon *= self.epsilon_decay
         
+        # Single host transfer. CUDA work is queued asynchronously, so every
+        # .item()/.cpu() blocks until the GPU drains that queue; the previous code
+        # stalled the pipeline six times per update to retrieve ~65 floats, twice
+        # recomputing values it already had (loss, and the two means that
+        # compute_q_value_stats derives anyway). Packing them into one tensor makes
+        # it a single stall.
+        #
+        # The means stay as torch reductions inside the packed tensor rather than
+        # being recomputed with np.mean on the host: float32 reductions depend on
+        # summation order, so recomputing them could shift the recorded values by an
+        # ULP. This way every number below is bit-identical to the previous code.
+        q_detached = q_values.detach()
+        target_detached = expected_q_values.detach()
+        packed = torch.cat((
+            loss.detach().reshape(1),
+            q_values.mean().detach().reshape(1),
+            expected_q_values.mean().detach().reshape(1),
+            q_detached.flatten(),
+            target_detached.flatten(),
+        )).cpu().numpy()
+
+        loss_value = float(packed[0])
+        q_mean_value = float(packed[1])
+        target_mean_value = float(packed[2])
+        split = 3 + q_detached.numel()
+        q_flat_np = packed[3:split]
+        target_flat_np = packed[split:]
+
         # Store training update for step-level integration
         self.last_training_update = {
-            "loss": float(loss.item()),
+            "loss": loss_value,
             "epsilon": self.epsilon,
-            "q_values": compute_q_value_stats(q_values.detach().cpu().numpy().flatten()),
-            "target_q_values": compute_q_value_stats(expected_q_values.detach().cpu().numpy().flatten())
+            "q_values": compute_q_value_stats(q_flat_np),
+            "target_q_values": compute_q_value_stats(target_flat_np)
         }
-            
+
         return {
-            "loss": loss.item(),
+            "loss": loss_value,
             "epsilon": self.epsilon,
-            "q_values_mean": q_values.mean().item(),
-            "target_q_mean": expected_q_values.mean().item()
+            "q_values_mean": q_mean_value,
+            "target_q_mean": target_mean_value
         }
 
     def update_target_network(self):
