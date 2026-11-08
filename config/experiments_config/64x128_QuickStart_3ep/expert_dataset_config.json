@@ -1,0 +1,21 @@
+{
+  "seed": 37,
+  "dataset_name": "QuickStart_64x128_Expert",
+  "total_samples": 2500,
+  "uniqueness": {
+    "scope": "dataset",
+    "ensure_unique_messages": true,
+    "ensure_unique_error_patterns": false
+  },
+  "curriculum": [
+    {
+      "phase_name": "Expert_Mixed_1_to_3_Errors",
+      "num_samples": 2500,
+      "error_models": [
+        { "type": "uniform_count", "weight": 0.3, "params": { "num_errors": 1 } },
+        { "type": "uniform_count", "weight": 0.4, "params": { "num_errors": 2 } },
+        { "type": "uniform_count", "weight": 0.3, "params": { "num_errors": 3 } }
+      ]
+    }
+  ]
+}

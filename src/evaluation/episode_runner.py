@@ -99,7 +99,12 @@ class EpisodeRunner:
         while not done:
             # All agents now use the unified interface
             legal_actions = self.env.get_legal_actions()
-            action = agent.select_action(state, training=False, legal_actions=legal_actions)
+            # Baselines read the list; the DQN agent masks its Q-values with the
+            # array. Both describe the same restriction, so every agent evaluated
+            # here faces the same action set.
+            action = agent.select_action(state, training=False,
+                                         legal_actions=legal_actions,
+                                         action_mask=self.env.get_action_mask())
             
             # Execute step
             next_state, reward, done, info = self.env.step(action)

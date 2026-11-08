@@ -1,0 +1,112 @@
+# Uniform-epsilon variant of 64x128_Full_AutoEp.
+#
+# Every curriculum phase gets the same schedule: open at 0.5, anneal linearly to
+# 0.01 over the first half of the phase, then hold the floor. 64x128_Full_AutoEp
+# tapers instead, opening at 1.0 in phase 1 and 0.2 in phase 6, and floors that
+# fall from 0.3 to 0.01. This variant exists to measure what that taper buys.
+#
+# The two differ in where exploration is spent, not only in how much. Mean
+# epsilon per phase, tapered against uniform:
+#
+#   phase   1      2      3      4      5      6
+#   taper   0.528  0.395  0.262  0.262  0.262  0.072
+#   flat    0.133  0.133  0.133  0.133  0.133  0.133
+#
+# Total random-action budget halves, but phase 6 receives 1.85x more of it than
+# under the taper while phase 1 receives a quarter. Everything else, including
+# the seed-42 dataset and the expert replay file, is shared with the baseline so
+# the epsilon schedule is the only difference.
+
+experiment_name: "Experiment_64x128_Full_AutoEp_Uniform"
+seed: 42
+device: "cuda"
+
+code_id: "64x128"
+
+# Pipeline
+run_dataset_creation: true
+run_training: true
+run_evaluation: true
+
+# Dataset and expert replay
+dataset_creation:
+  config_path: "config/experiments_config/64x128_Full_AutoEp_Uniform/main_dataset_config.json" # Curriculum configuration
+  output_path: "data/ldpc_64x128_main_dataset.h5"
+  test_size: 0.3
+  force_recreate: false # Reuse the seed-42 dataset so this is comparable to the baseline
+
+expert_experience:
+  use_pregenerated_file: true # If true, load from pregenerated_file
+  pregenerated_file: "data/64x128_omniscient_500000.pkl" # Path to pregenerated experiences
+
+# Training
+training:
+  num_epochs: 1
+  replay_buffer_size: 5000000
+  batch_size: 32
+  target_update_freq: 1000
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  update_frequency: 1  # Perform one gradient update every N environment steps.
+
+  epsilon_decay_type: "linear"  # Options: "exponential" or "linear"
+  # "auto_episodes" sets epsilon from progress through each phase, counted in
+  # episodes, so the floor lands where asked regardless of how episode length
+  # shifts during training.
+  epsilon_decay: "auto_episodes"
+  epsilon_anneal_fraction: 0.5    # Reach epsilon_min at 50% of each phase, then exploit
+  # One value, broadcast to every phase: no taper across the curriculum.
+  epsilon_start: 0.5   # Every phase opens here
+  epsilon_min: 0.01    # Every phase anneals to here, then holds it
+  # Inert under "auto_episodes": epsilon is rewritten from phase progress at the
+  # start of every episode, so each phase reopens at epsilon_start regardless.
+  epsilon_phase_reset: true
+  
+  network:
+    type: "LDPCOptimizedMLP"
+    dropout_rate: 0.05
+    leaky_slope: 0.01
+    hidden_dim1: 640
+
+# Evaluation
+evaluation:
+  baseline_agents:
+    - name: "random"
+      enabled: false
+    - name: "greedy"
+      enabled: true
+    - name: "simple_classical"
+      enabled: false
+    - name: "min_sum" # Disabled for runtime cost.
+      enabled: false
+    - name: "min_sum_expert"
+      enabled: true 
+
+# Environment
+environment:
+  max_steps: 12 # Allows bounded exploration beyond the expected correction path.
+  max_flips_vector: 7 # Allows margin above the theoretical t=6 correction radius.
+
+# Model loading
+load_pretrained_model:
+  enabled: false               # Set to true to load a pre-trained model
+  model_path: "models/ldpc_rl_agent.pth"  # Path to pre-trained model
+  overwrite: false             # If true, overwrite the loaded model after training/distillation
+                               # If false, create new checkpoint (preserves original model)
+
+# Output paths
+output_paths:
+  results_dir: "results/"      # Directory for metrics, logs, and training data
+  models_dir: "models/"        # Directory for model checkpoints and saved models
+
+# Memory management
+memory_management:
+  training:
+    max_episodes_per_phase: 100000  # Episodes to keep in memory per curriculum phase
+    auto_flush_frequency: 50001    # Check memory every N episodes
+    enable_progressive_saving: true # Enable phase-based saving
+  
+  evaluation:
+    max_episodes_per_agent: 100000  # Episodes to keep in memory per agent evaluation
+    auto_flush_frequency: 50001     # Check memory every N episodes (less frequent)
+    enable_progressive_saving: true # Enable agent-based saving

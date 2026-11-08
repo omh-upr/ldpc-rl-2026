@@ -200,7 +200,7 @@
     "category": "training_dynamics",
     "subcategory": "learning_progression",
     "title": "DQN Loss Curve",
-    "description": "Plots the DQN loss over training updates.",
+    "description": "Plots the DQN loss over training updates. Ordered by the run-global training episode id, which is continuous across epochs, and the epoch is carried through so boundaries can be marked.",
     "keywords": [
       "plot",
       "loss",
@@ -208,7 +208,7 @@
     ],
     "data_focus": "training",
     "complexity": "simple",
-    "query_template": "SELECT s.global_episode_id, e.original_episode_id, AVG(s.training_loss) as avg_loss FROM steps s JOIN episodes e ON s.global_episode_id = e.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_loss IS NOT NULL GROUP BY s.global_episode_id, e.original_episode_id ORDER BY e.original_episode_id;",
+    "query_template": "SELECT s.global_episode_id, e.epoch, e.original_episode_id, AVG(s.training_loss) as avg_loss FROM steps s JOIN episodes e ON s.global_episode_id = e.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_loss IS NOT NULL GROUP BY s.global_episode_id, e.epoch, e.original_episode_id ORDER BY e.original_episode_id;",
     "params": [],
     "result_type": "plot",
     "plot_config": {
@@ -235,7 +235,7 @@
     "category": "training_dynamics",
     "subcategory": "learning_progression",
     "title": "DQN Loss Curve (Fixed - Continuous Numbering)",
-    "description": "Plots the DQN loss over training updates using continuous episode numbering (Solution 3: ROW_NUMBER approach). This fixes the episode ID reset issue between phases.",
+    "description": "Plots the DQN loss over training updates using continuous episode numbering (Solution 3: ROW_NUMBER approach). This fixes the episode ID reset issue between phases. Ordered by the run-global training episode id, which is continuous across epochs, and the epoch is carried through so boundaries can be marked.",
     "keywords": [
       "plot",
       "loss",
@@ -245,7 +245,7 @@
     ],
     "data_focus": "training",
     "complexity": "moderate",
-    "query_template": "WITH ranked_episodes AS (SELECT s.global_episode_id, e.original_episode_id, e.phase, AVG(s.training_loss) as avg_loss, ROW_NUMBER() OVER (ORDER BY e.phase, e.original_episode_id) - 1 as cumulative_episode_id FROM steps s JOIN episodes e ON s.global_episode_id = e.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_loss IS NOT NULL GROUP BY s.global_episode_id, e.original_episode_id, e.phase) SELECT cumulative_episode_id, avg_loss FROM ranked_episodes ORDER BY cumulative_episode_id;",
+    "query_template": "WITH ranked_episodes AS (SELECT s.global_episode_id, e.original_episode_id, e.epoch, e.phase, AVG(s.training_loss) as avg_loss, ROW_NUMBER() OVER (ORDER BY e.original_episode_id) - 1 as cumulative_episode_id FROM steps s JOIN episodes e ON s.global_episode_id = e.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_loss IS NOT NULL GROUP BY s.global_episode_id, e.original_episode_id, e.epoch, e.phase) SELECT cumulative_episode_id, epoch, phase, avg_loss FROM ranked_episodes ORDER BY cumulative_episode_id;",
     "params": [],
     "result_type": "plot",
     "plot_config": {
@@ -271,18 +271,19 @@
     "id": "curriculum_effectiveness",
     "category": "training_dynamics",
     "subcategory": "curriculum_learning",
-    "title": "Curriculum Learning Effectiveness",
-    "description": "Evaluates success rate progression and episode length reduction across curriculum phases during training.",
+    "title": "Curriculum Learning Effectiveness (per Epoch and Phase)",
+    "description": "Evaluates success rate progression and episode length reduction across curriculum phases during training. Rows are split by epoch: a curriculum phase repeats on every pass, so grouping on phase alone would average a first pass together with later ones.",
     "keywords": [
       "curriculum",
       "training",
       "success_rate",
       "phases",
-      "progression"
+      "progression",
+      "epoch"
     ],
     "data_focus": "training",
     "complexity": "simple",
-    "query_template": "SELECT phase, COUNT(*) as total_episodes, SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_episodes, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate, AVG(episode_length) as avg_episode_length, STDDEV(episode_length) as std_episode_length FROM episodes WHERE episode_type = 'train' AND agent_type = 'agent' GROUP BY phase ORDER BY phase;",
+    "query_template": "SELECT epoch, phase, COUNT(*) as total_episodes, SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_episodes, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate, AVG(episode_length) as avg_episode_length, STDDEV(episode_length) as std_episode_length FROM episodes WHERE episode_type = 'train' AND agent_type = 'agent' GROUP BY epoch, phase ORDER BY epoch, phase;",
     "params": [],
     "result_type": "plot",
     "plot_config": {
@@ -309,18 +310,19 @@
     "id": "catastrophic_forgetting",
     "category": "training_dynamics",
     "subcategory": "curriculum_learning",
-    "title": "Catastrophic Forgetting Detection",
-    "description": "Analyzes performance retention on simpler error patterns when transitioning to more complex curriculum phases.",
+    "title": "Catastrophic Forgetting Detection (across Epochs)",
+    "description": "Tracks the success rate on each error weight as the curriculum advances, so a drop on easier cases after moving to harder phases is visible. Compares each (epoch, phase) segment with the previous one in training order, which runs across the epoch boundary rather than back to phase 1 of the same epoch. Previously grouped on array_length(error_pattern), which is the codeword length and therefore the same constant for every episode, so the partition it compared within was degenerate.",
     "keywords": [
       "forgetting",
       "curriculum",
       "retention",
       "performance",
-      "phases"
+      "phases",
+      "epoch"
     ],
     "data_focus": "training",
     "complexity": "medium",
-    "query_template": "WITH phase_performance AS (SELECT phase, array_length(error_pattern) as error_count, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate FROM episodes WHERE episode_type = 'train' AND agent_type = 'agent' GROUP BY phase, array_length(error_pattern)) SELECT p1.phase, p1.error_count, p1.success_rate as current_phase_rate, LAG(p1.success_rate) OVER (PARTITION BY p1.error_count ORDER BY p1.phase) as previous_phase_rate, p1.success_rate - LAG(p1.success_rate) OVER (PARTITION BY p1.error_count ORDER BY p1.phase) as performance_change FROM phase_performance p1 ORDER BY p1.error_count, p1.phase;",
+    "query_template": "WITH phase_performance AS (SELECT epoch, phase, num_errors, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate, COUNT(*) as episodes FROM episodes WHERE episode_type = 'train' AND agent_type = 'agent' GROUP BY epoch, phase, num_errors) SELECT p1.epoch, p1.phase, p1.num_errors, p1.episodes, p1.success_rate as current_phase_rate, LAG(p1.success_rate) OVER (PARTITION BY p1.num_errors ORDER BY p1.epoch, p1.phase) as previous_phase_rate, p1.success_rate - LAG(p1.success_rate) OVER (PARTITION BY p1.num_errors ORDER BY p1.epoch, p1.phase) as performance_change FROM phase_performance p1 ORDER BY p1.num_errors, p1.epoch, p1.phase;",
     "params": [],
     "result_type": "plot",
     "plot_config": {
@@ -349,19 +351,20 @@
     "id": "exploration_evolution",
     "category": "training_dynamics",
     "subcategory": "exploration_strategies",
-    "title": "Exploration vs Exploitation Evolution",
-    "description": "DEPRECATED: This analysis aggregates epsilon by phase, producing limited data points for single-phase experiments. Use 'epsilon_decay_curve' for general-purpose continuous epsilon progression, or 'epsilon_decay_by_phase' for curriculum-specific per-phase analysis. This analysis is kept for backward compatibility only.",
+    "title": "Exploration vs Exploitation Evolution (per Epoch and Phase)",
+    "description": "DEPRECATED: This analysis aggregates epsilon by phase, producing limited data points for single-phase experiments. Use 'epsilon_decay_curve' for general-purpose continuous epsilon progression, or 'epsilon_decay_by_phase' for curriculum-specific per-phase analysis. This analysis is kept for backward compatibility only. Rows are split by epoch: a curriculum phase repeats on every pass, so grouping on phase alone would average a first pass together with later ones.",
     "keywords": [
       "exploration",
       "exploitation",
       "epsilon",
       "q_values",
       "confidence",
-      "deprecated"
+      "deprecated",
+      "epoch"
     ],
     "data_focus": "training",
     "complexity": "medium",
-    "query_template": "WITH training_progression AS (SELECT s.global_episode_id, e.phase, e.original_episode_id, AVG(s.training_epsilon) as avg_epsilon, AVG(s.q_values_std) as avg_q_variance, COUNT(DISTINCT s.action) as action_diversity FROM steps s JOIN episodes e ON s.global_episode_id = e.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_epsilon IS NOT NULL GROUP BY s.global_episode_id, e.phase, e.original_episode_id) SELECT phase, AVG(avg_epsilon) as mean_epsilon, AVG(avg_q_variance) as mean_q_variance, AVG(action_diversity) as mean_action_diversity FROM training_progression GROUP BY phase ORDER BY phase;",
+    "query_template": "WITH training_progression AS (SELECT s.global_episode_id, e.epoch, e.phase, e.original_episode_id, AVG(s.training_epsilon) as avg_epsilon, AVG(s.q_values_std) as avg_q_variance, COUNT(DISTINCT s.action) as action_diversity FROM steps s JOIN episodes e ON s.global_episode_id = e.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_epsilon IS NOT NULL GROUP BY s.global_episode_id, e.epoch, e.phase, e.original_episode_id) SELECT epoch, phase, AVG(avg_epsilon) as mean_epsilon, AVG(avg_q_variance) as mean_q_variance, AVG(action_diversity) as mean_action_diversity FROM training_progression GROUP BY epoch, phase ORDER BY epoch, phase;",
     "params": [],
     "result_type": "plot",
     "plot_config": {
@@ -388,7 +391,7 @@
     "category": "training_dynamics",
     "subcategory": "exploration_strategies",
     "title": "Epsilon Decay Curve (Continuous)",
-    "description": "Tracks epsilon decay progression over continuous training episodes, independent of curriculum phases. Episodes are bucketed into groups for visualization clarity. Works with both single-phase and multi-phase experiments.",
+    "description": "Tracks epsilon decay progression over continuous training episodes, independent of curriculum phases. Episodes are bucketed into groups for visualization clarity. Works with both single-phase and multi-phase experiments. Ordered by the run-global training episode id, which is continuous across epochs, and the epoch is carried through so boundaries can be marked. Buckets by floor division: CAST(x / 500 AS INTEGER) rounds, so bucket 500 used to hold episodes 250 through 749 rather than 500 through 999.",
     "keywords": [
       "epsilon",
       "decay",
@@ -398,7 +401,7 @@
     ],
     "data_focus": "training",
     "complexity": "simple",
-    "query_template": "WITH ranked_episodes AS (SELECT e.global_episode_id, e.phase, e.original_episode_id, ROW_NUMBER() OVER (ORDER BY e.phase, e.original_episode_id) as continuous_episode_id, AVG(s.training_epsilon) as avg_epsilon FROM episodes e JOIN steps s ON e.global_episode_id = s.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_epsilon IS NOT NULL GROUP BY e.global_episode_id, e.phase, e.original_episode_id), bucketed AS (SELECT CAST(continuous_episode_id / 500 AS INTEGER) * 500 as episode_bucket, AVG(avg_epsilon) as mean_epsilon, MIN(avg_epsilon) as min_epsilon, MAX(avg_epsilon) as max_epsilon, COUNT(*) as episodes_in_bucket FROM ranked_episodes GROUP BY CAST(continuous_episode_id / 500 AS INTEGER)) SELECT episode_bucket, mean_epsilon, min_epsilon, max_epsilon, episodes_in_bucket FROM bucketed ORDER BY episode_bucket;",
+    "query_template": "WITH ranked_episodes AS (SELECT e.global_episode_id, e.epoch, e.phase, e.original_episode_id, ROW_NUMBER() OVER (ORDER BY e.original_episode_id) - 1 as continuous_episode_id, AVG(s.training_epsilon) as avg_epsilon FROM episodes e JOIN steps s ON e.global_episode_id = s.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_epsilon IS NOT NULL GROUP BY e.global_episode_id, e.epoch, e.phase, e.original_episode_id), bucketed AS (SELECT (continuous_episode_id // 500) * 500 as episode_bucket, MIN(epoch) as epoch, AVG(avg_epsilon) as mean_epsilon, MIN(avg_epsilon) as min_epsilon, MAX(avg_epsilon) as max_epsilon, COUNT(*) as episodes_in_bucket FROM ranked_episodes GROUP BY continuous_episode_id // 500) SELECT episode_bucket, epoch, mean_epsilon, min_epsilon, max_epsilon, episodes_in_bucket FROM bucketed ORDER BY episode_bucket;",
     "params": [],
     "result_type": "plot",
     "plot_config": {
@@ -424,18 +427,19 @@
     "id": "epsilon_decay_by_phase",
     "category": "training_dynamics",
     "subcategory": "exploration_strategies",
-    "title": "Epsilon Decay Within Each Phase (Curriculum)",
-    "description": "Shows epsilon decay progression within each curriculum phase separately. Episodes are renumbered 0-N within each phase to show per-phase decay patterns. Useful for analyzing epsilon reset behavior and per-phase exploration strategies in curriculum learning. Requires multiple curriculum phases.",
+    "title": "Epsilon Decay Within Each Epoch and Phase (Curriculum)",
+    "description": "Shows epsilon decay progression within each curriculum phase separately. Episodes are renumbered 0-N within each phase to show per-phase decay patterns. Useful for analyzing epsilon reset behavior and per-phase exploration strategies in curriculum learning. Requires multiple curriculum phases. Rows are split by epoch: a curriculum phase repeats on every pass, so grouping on phase alone would average a first pass together with later ones. Buckets by floor division, for the same reason as the run-wide epsilon curve.",
     "keywords": [
       "epsilon",
       "decay",
       "curriculum",
       "phase",
-      "exploration"
+      "exploration",
+      "epoch"
     ],
     "data_focus": "training",
     "complexity": "simple",
-    "query_template": "WITH phase_episodes AS (SELECT e.global_episode_id, e.phase, e.original_episode_id, ROW_NUMBER() OVER (PARTITION BY e.phase ORDER BY e.original_episode_id) - 1 as phase_episode_id, AVG(s.training_epsilon) as avg_epsilon FROM episodes e JOIN steps s ON e.global_episode_id = s.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_epsilon IS NOT NULL GROUP BY e.global_episode_id, e.phase, e.original_episode_id), bucketed AS (SELECT phase, CAST(phase_episode_id / 500 AS INTEGER) * 500 as phase_episode_bucket, AVG(avg_epsilon) as mean_epsilon, MIN(avg_epsilon) as min_epsilon, MAX(avg_epsilon) as max_epsilon, COUNT(*) as episodes_in_bucket FROM phase_episodes GROUP BY phase, CAST(phase_episode_id / 500 AS INTEGER)) SELECT phase, phase_episode_bucket, mean_epsilon, min_epsilon, max_epsilon, episodes_in_bucket FROM bucketed ORDER BY phase, phase_episode_bucket;",
+    "query_template": "WITH phase_episodes AS (SELECT e.global_episode_id, e.epoch, e.phase, e.original_episode_id, ROW_NUMBER() OVER (PARTITION BY e.epoch, e.phase ORDER BY e.original_episode_id) - 1 as phase_episode_id, AVG(s.training_epsilon) as avg_epsilon FROM episodes e JOIN steps s ON e.global_episode_id = s.global_episode_id WHERE e.episode_type = 'train' AND e.agent_type = 'agent' AND s.training_epsilon IS NOT NULL GROUP BY e.global_episode_id, e.epoch, e.phase, e.original_episode_id), bucketed AS (SELECT epoch, phase, (phase_episode_id // 500) * 500 as phase_episode_bucket, AVG(avg_epsilon) as mean_epsilon, MIN(avg_epsilon) as min_epsilon, MAX(avg_epsilon) as max_epsilon, COUNT(*) as episodes_in_bucket FROM phase_episodes GROUP BY epoch, phase, phase_episode_id // 500) SELECT epoch, phase, phase_episode_bucket, mean_epsilon, min_epsilon, max_epsilon, episodes_in_bucket FROM bucketed ORDER BY epoch, phase, phase_episode_bucket;",
     "params": [],
     "result_type": "plot",
     "plot_config": {
@@ -464,7 +468,7 @@
     "category": "comparative_analysis",
     "subcategory": "agent_comparisons",
     "title": "Baseline Superiority Conditions",
-    "description": "Identifies specific conditions where each baseline algorithm outperforms the RL agent.",
+    "description": "Identifies specific conditions where each baseline algorithm outperforms the RL agent. Groups on the stored num_errors; it previously grouped on array_length(error_pattern), which is the codeword length and so the same constant for every episode, collapsing all difficulty levels into one row.",
     "keywords": [
       "baseline",
       "superiority",
@@ -474,7 +478,7 @@
     ],
     "data_focus": "evaluation",
     "complexity": "medium",
-    "query_template": "WITH comparative_performance AS (SELECT agent_type, array_length(error_pattern) as error_count, COUNT(*) as total_episodes, SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_episodes, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate, AVG(episode_length) as avg_steps FROM episodes WHERE episode_type = 'eval' GROUP BY agent_type, array_length(error_pattern)), agent_rankings AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY error_count ORDER BY success_rate DESC) as performance_rank FROM comparative_performance) SELECT error_count, agent_type, success_rate, avg_steps, performance_rank, LAG(success_rate) OVER (PARTITION BY error_count ORDER BY performance_rank) - success_rate as gap_to_leader FROM agent_rankings ORDER BY error_count, performance_rank;",
+    "query_template": "WITH comparative_performance AS (SELECT agent_type, num_errors as error_count, COUNT(*) as total_episodes, SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_episodes, CAST(SUM(CASE WHEN success THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate, AVG(episode_length) as avg_steps FROM episodes WHERE episode_type = 'eval' GROUP BY agent_type, num_errors), agent_rankings AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY error_count ORDER BY success_rate DESC) as performance_rank FROM comparative_performance) SELECT error_count, agent_type, success_rate, avg_steps, performance_rank, LAG(success_rate) OVER (PARTITION BY error_count ORDER BY performance_rank) - success_rate as gap_to_leader FROM agent_rankings ORDER BY error_count, performance_rank;",
     "params": [],
     "result_type": "plot",
     "plot_config": {
@@ -543,18 +547,19 @@
     "id": "curriculum_phase_efficiency",
     "category": "training_dynamics",
     "subcategory": "curriculum_learning",
-    "title": "Average Episode Steps per Curriculum Phase",
-    "description": "Shows the average number of steps required to complete episodes during each curriculum phase of training, indicating learning efficiency progression.",
+    "title": "Average Episode Steps per Epoch and Curriculum Phase",
+    "description": "Shows the average number of steps required to complete episodes during each curriculum phase of training, indicating learning efficiency progression. Rows are split by epoch: a curriculum phase repeats on every pass, so grouping on phase alone would average a first pass together with later ones.",
     "keywords": [
       "curriculum",
       "phase",
       "episode_steps",
       "efficiency",
-      "training"
+      "training",
+      "epoch"
     ],
     "data_focus": "training",
     "complexity": "simple",
-    "query_template": "SELECT phase, COUNT(*) as total_episodes, AVG(episode_length) as avg_episode_steps, STDDEV(episode_length) as std_episode_steps, MIN(episode_length) as min_steps, MAX(episode_length) as max_steps FROM episodes WHERE episode_type = 'train' AND agent_type = 'agent' GROUP BY phase ORDER BY phase;",
+    "query_template": "SELECT epoch, phase, COUNT(*) as total_episodes, AVG(episode_length) as avg_episode_steps, STDDEV(episode_length) as std_episode_steps, MIN(episode_length) as min_steps, MAX(episode_length) as max_steps FROM episodes WHERE episode_type = 'train' AND agent_type = 'agent' GROUP BY epoch, phase ORDER BY epoch, phase;",
     "params": [],
     "result_type": "plot",
     "plot_config": {
@@ -581,18 +586,19 @@
     "id": "curriculum_phase_total_steps",
     "category": "training_dynamics",
     "subcategory": "curriculum_learning",
-    "title": "Total Steps per Curriculum Phase",
-    "description": "Shows the total number of training steps accumulated during each curriculum phase, providing insight into training workload distribution.",
+    "title": "Total Steps per Epoch and Curriculum Phase",
+    "description": "Shows the total number of training steps accumulated during each curriculum phase, providing insight into training workload distribution. Rows are split by epoch: a curriculum phase repeats on every pass, so grouping on phase alone would average a first pass together with later ones.",
     "keywords": [
       "curriculum",
       "phase",
       "total_steps",
       "training_volume",
-      "workload"
+      "workload",
+      "epoch"
     ],
     "data_focus": "training",
     "complexity": "simple",
-    "query_template": "SELECT phase, COUNT(*) as total_episodes, SUM(episode_length) as total_steps, AVG(episode_length) as avg_episode_steps, MIN(episode_length) as min_steps, MAX(episode_length) as max_steps FROM episodes WHERE episode_type = 'train' AND agent_type = 'agent' GROUP BY phase ORDER BY phase;",
+    "query_template": "SELECT epoch, phase, COUNT(*) as total_episodes, SUM(episode_length) as total_steps, AVG(episode_length) as avg_episode_steps, MIN(episode_length) as min_steps, MAX(episode_length) as max_steps FROM episodes WHERE episode_type = 'train' AND agent_type = 'agent' GROUP BY epoch, phase ORDER BY epoch, phase;",
     "params": [],
     "result_type": "dataframe",
     "prerequisites": {
@@ -606,7 +612,7 @@
     "category": "statistical_validation",
     "subcategory": "variance_studies",
     "title": "Performance Variance Analysis",
-    "description": "Analyzes performance variance and stability across different experimental conditions using coefficient of variation.",
+    "description": "Analyzes performance variance and stability across different experimental conditions using coefficient of variation. Groups on the stored num_errors; it previously grouped on array_length(error_pattern), the codeword length, which merged every error level into a single group.",
     "keywords": [
       "variance",
       "stability",
@@ -616,7 +622,7 @@
     ],
     "data_focus": "evaluation",
     "complexity": "medium",
-    "query_template": "WITH episode_performance AS (SELECT agent_type, array_length(error_pattern) as error_count, success, episode_length FROM episodes WHERE episode_type = 'eval'), variance_stats AS (SELECT agent_type, error_count, COUNT(*) as n_episodes, AVG(CAST(success AS REAL)) as mean_success_rate, STDDEV(CAST(success AS REAL)) as success_rate_stddev, AVG(episode_length) as mean_episode_length, STDDEV(episode_length) as episode_length_stddev FROM episode_performance GROUP BY agent_type, error_count HAVING COUNT(*) >= 10) SELECT agent_type, error_count, n_episodes, mean_success_rate, success_rate_stddev, CASE WHEN mean_success_rate > 0 THEN success_rate_stddev / mean_success_rate ELSE NULL END as success_cv, mean_episode_length, episode_length_stddev, episode_length_stddev / mean_episode_length as length_cv FROM variance_stats ORDER BY agent_type, error_count;",
+    "query_template": "WITH episode_performance AS (SELECT agent_type, num_errors as error_count, success, episode_length FROM episodes WHERE episode_type = 'eval'), variance_stats AS (SELECT agent_type, error_count, COUNT(*) as n_episodes, AVG(CAST(success AS REAL)) as mean_success_rate, STDDEV(CAST(success AS REAL)) as success_rate_stddev, AVG(episode_length) as mean_episode_length, STDDEV(episode_length) as episode_length_stddev FROM episode_performance GROUP BY agent_type, error_count HAVING COUNT(*) >= 10) SELECT agent_type, error_count, n_episodes, mean_success_rate, success_rate_stddev, CASE WHEN mean_success_rate > 0 THEN success_rate_stddev / mean_success_rate ELSE NULL END as success_cv, mean_episode_length, episode_length_stddev, episode_length_stddev / mean_episode_length as length_cv FROM variance_stats ORDER BY agent_type, error_count;",
     "params": [],
     "result_type": "plot",
     "plot_config": {
@@ -752,19 +758,20 @@
     "id": "steps_distribution_training",
     "category": "training_dynamics",
     "subcategory": "learning_progression",
-    "title": "Distribution of Episode Lengths - Training Episodes",
-    "description": "Shows how many training episodes took each number of steps to complete, grouped by success vs failure. Includes success and failure rates to identify step-count patterns during training.",
+    "title": "Distribution of Episode Lengths - Training Episodes (per Epoch)",
+    "description": "Shows how many training episodes took each number of steps to complete, grouped by success vs failure. Includes success and failure rates to identify step-count patterns during training. Rows are split by epoch: a curriculum phase repeats on every pass, so grouping on phase alone would average a first pass together with later ones.",
     "keywords": [
       "steps",
       "distribution",
       "training",
       "episodes",
       "success_rate",
-      "failure_rate"
+      "failure_rate",
+      "epoch"
     ],
     "data_focus": "training",
     "complexity": "simple",
-    "query_template": "SELECT episode_length AS time_steps, COUNT(*) AS total_episodes, SUM(CASE WHEN success = true THEN 1 ELSE 0 END) AS successful, SUM(CASE WHEN success = false THEN 1 ELSE 0 END) AS failed, ROUND(100.0 * SUM(CASE WHEN success = true THEN 1 ELSE 0 END) / COUNT(*), 2) AS success_rate_pct, ROUND(100.0 * SUM(CASE WHEN success = false THEN 1 ELSE 0 END) / COUNT(*), 2) AS failure_rate_pct FROM episodes WHERE episode_type = 'train' GROUP BY episode_length ORDER BY episode_length;",
+    "query_template": "SELECT epoch, episode_length AS time_steps, COUNT(*) AS total_episodes, SUM(CASE WHEN success = true THEN 1 ELSE 0 END) AS successful, SUM(CASE WHEN success = false THEN 1 ELSE 0 END) AS failed, ROUND(100.0 * SUM(CASE WHEN success = true THEN 1 ELSE 0 END) / COUNT(*), 2) AS success_rate_pct, ROUND(100.0 * SUM(CASE WHEN success = false THEN 1 ELSE 0 END) / COUNT(*), 2) AS failure_rate_pct FROM episodes WHERE episode_type = 'train' GROUP BY epoch, episode_length ORDER BY epoch, episode_length;",
     "params": [],
     "result_type": "dataframe",
     "prerequisites": {

@@ -15,15 +15,26 @@ from pathlib import Path
 class ProgressiveSaver:
     """
     Unified progressive saving for training phases and evaluation agents.
-    
-    Provides consistent memory management and file creation across different
-    contexts while maintaining clean separation between training and evaluation data.
+
+    Episodes are written to disk as they are flushed rather than accumulated, so
+    the collector's episode limit bounds what is held in memory instead of merely
+    moving it from the collector to the saver. The output is one gzipped JSON
+    document per phase, unchanged in shape from when it was built in memory.
+
+    Two failure rules follow from that:
+
+    - A phase writes to a temporary file and is renamed into place only once it is
+      complete, so an interrupted or failed phase never leaves a file that looks
+      finished, and collectors are cleared only after that rename.
+    - Per-phase state is created in start_phase and dropped in end_phase or
+      abort_phase, so one agent's episodes can never appear in the next agent's
+      file.
     """
-    
+
     def __init__(self, base_filename: str, save_type: str = "training", output_dir: str = "results"):
         """
         Initialize progressive saver with base configuration.
-        
+
         Args:
             base_filename: Base name for generated files (without extension)
             save_type: Type of saving - "training" or "evaluation"
@@ -32,146 +43,171 @@ class ProgressiveSaver:
         self.base_filename = base_filename
         self.save_type = save_type
         self.output_dir = Path(output_dir)
-        self.current_phase = None
-        self.current_collectors = None
         self.saved_files = []
-        self._temp_data = []
-        
+
+        self._reset_phase_state()
+
         # Ensure output directory exists
         self.output_dir.mkdir(parents=True, exist_ok=True)
-    
+
+    def _reset_phase_state(self):
+        """Drop everything belonging to a single phase."""
+        self.current_phase = None
+        self.current_collectors = None
+        self._handle = None
+        self._temp_path = None
+        self._final_path = None
+        self._episodes_written = 0
+
     def start_phase(self, phase_id: str, collectors: Dict[str, Any]) -> Callable:
         """
         Begin new phase/agent with collectors configured for progressive saving.
-        
+
         Args:
             phase_id: Identifier for the phase (e.g., "phase1", "agent_rl")
             collectors: Dictionary of collectors to configure with flush callbacks
-            
+
         Returns:
             Flush callback function for the collectors
         """
+        # A phase still open here failed without saying so. Discard it rather than
+        # letting its episodes and its open file leak into this one.
+        if self.current_phase is not None:
+            print(f"   Discarding unfinished phase {self.current_phase}")
+            self.abort_phase()
+
         self.current_phase = phase_id
         self.current_collectors = collectors
-        
+
+        self._final_path = self.output_dir / self._generate_filename(phase_id)
+        self._temp_path = self._final_path.with_name(self._final_path.name + '.partial')
+        self._handle = gzip.open(self._temp_path, 'wt', encoding='utf-8')
+        self._handle.write(
+            '{"phase_id": %s, "save_type": %s, "episodes": ['
+            % (json.dumps(phase_id), json.dumps(self.save_type))
+        )
+        self._episodes_written = 0
+
         # Create flush callback for this phase
         flush_callback = self._create_flush_callback(phase_id)
-        
+
         # Configure collectors with the flush callback
         for collector in collectors.values():
             if hasattr(collector, 'flush_callback'):
                 collector.flush_callback = flush_callback
-        
+
         return flush_callback
-    
+
     def end_phase(self) -> str:
         """
-        End current phase and save all remaining data.
-        
+        End current phase, writing whatever the collectors still hold.
+
         Returns:
             Path to the saved file
         """
-        if not self.current_phase or not self.current_collectors:
+        if not self.current_phase or self.current_collectors is None:
             raise ValueError("No active phase to end. Call start_phase() first.")
-        
-        # Generate filename for this phase
-        filename = self._generate_filename(self.current_phase)
-        filepath = self.output_dir / filename
-        
-        # Collect all data from collectors
-        phase_data = self._collect_phase_data()
-        
-        # Save the data
-        self._save_data(filepath, phase_data)
-        
-        # Clear current phase state
-        self.current_phase = None
-        self.current_collectors = None
-        
-        # Track saved file
-        self.saved_files.append(str(filepath))
-        
-        return str(filepath)
-    
+
+        for collector_name, collector in self.current_collectors.items():
+            remaining = getattr(collector, 'episodes', None)
+            if remaining:
+                self._write_episodes(remaining)
+                print(f"   Wrote {len(remaining)} remaining episodes from {collector_name}")
+
+        self._handle.write(']}')
+        self._handle.close()
+        self._handle = None
+
+        # Rename only after a complete document is on disk, so a reader never sees
+        # a partial file under the final name.
+        os.replace(self._temp_path, self._final_path)
+        print(f"   Saved {self._episodes_written} episodes to {self._final_path.name}")
+
+        # Safe to drop the in-memory copies now, and only now.
+        self._clear_collectors()
+
+        saved_path = str(self._final_path)
+        self.saved_files.append(saved_path)
+        self._reset_phase_state()
+
+        return saved_path
+
+    def abort_phase(self):
+        """
+        Abandon the current phase and remove its partial file.
+
+        Called when a phase fails. Collectors are left alone: the caller decides
+        whether their contents are still wanted.
+        """
+        if self._handle is not None:
+            try:
+                self._handle.close()
+            except Exception:
+                pass
+        if self._temp_path is not None and self._temp_path.exists():
+            try:
+                self._temp_path.unlink()
+            except OSError as e:
+                print(f"   Could not remove partial file {self._temp_path}: {e}")
+        self._reset_phase_state()
+
+    def _write_episodes(self, episodes):
+        """Append episodes to the open phase file."""
+        if self._handle is None:
+            raise RuntimeError(
+                "No phase file is open. start_phase() must be called before episodes "
+                "can be written, and a flush callback must not outlive its phase.")
+        for episode in episodes:
+            if self._episodes_written:
+                self._handle.write(',')
+            self._handle.write(json.dumps(episode, default=self._json_serializer))
+            self._episodes_written += 1
+
     def _create_flush_callback(self, phase_id: str) -> Callable:
         """
         Create phase-specific flush callback for collectors.
-        
-        This callback will be called by collectors when they need to flush
-        data due to memory limits, allowing the progressive saver to handle
-        the data appropriately.
+
+        The collector calls this when it hits its memory limit. Writing straight
+        through to disk is what makes that limit mean something.
         """
-        def flush_callback(collector_data: Dict[str, Any]):
-            # Add the flushed data to our temporary storage
+        def flush_callback(collector_data: Any):
             if isinstance(collector_data, list):
-                self._temp_data.extend(collector_data)
+                episodes = collector_data
             elif isinstance(collector_data, dict) and 'episodes' in collector_data:
-                self._temp_data.extend(collector_data['episodes'])
-            
-            print(f"   Temporarily stored {len(collector_data) if isinstance(collector_data, list) else 'unknown'} episodes for {phase_id}")
-        
+                episodes = collector_data['episodes']
+            else:
+                episodes = []
+
+            self._write_episodes(episodes)
+            print(f"   Wrote {len(episodes)} flushed episodes for {phase_id}")
+
         return flush_callback
-    
+
     def _generate_filename(self, phase_id: str) -> str:
         """Generate consistent filename for a phase."""
         return f"{self.base_filename}_{phase_id}.json.gz"
-    
-    def _collect_phase_data(self) -> Dict[str, Any]:
-        """Collect all data from current collectors and temporary storage."""
-        phase_data = {
-            'phase_id': self.current_phase,
-            'save_type': self.save_type,
-            'episodes': []
-        }
-        
-        # Collect any temporarily stored data from flushes
-        if self._temp_data:
-            phase_data['episodes'].extend(self._temp_data)
-            print(f"   Collected {len(self._temp_data)} episodes from temporary storage")
 
-        # Collect remaining data from all collectors
-        for collector_name, collector in self.current_collectors.items():
-            if hasattr(collector, 'episodes'):
-                phase_data['episodes'].extend(collector.episodes)
-                print(f"   Collected {len(collector.episodes)} remaining episodes from {collector_name}")
-
-        # Clear temporary data
-        self._temp_data = []
-        
-        # Clear all collectors to free memory (like curriculum phases do)
-        self._clear_collectors()
-        
-        return phase_data
-    
     def _clear_collectors(self):
         """Clear all episode data from collectors to free memory."""
         total_episodes_cleared = 0
-        
+
         for collector_name, collector in self.current_collectors.items():
             if hasattr(collector, 'episodes'):
                 episodes_count = len(collector.episodes)
                 collector.episodes = []  # Clear the episodes list
                 total_episodes_cleared += episodes_count
-                
+
                 # Also reset episode count if it exists
                 if hasattr(collector, 'episode_count'):
                     collector.episode_count = 0
-                
+
                 # Reset any other collection state
                 if hasattr(collector, 'reset'):
                     collector.reset()
-        
+
         if total_episodes_cleared > 0:
             print(f"   Cleared {total_episodes_cleared} episodes from memory after saving")
-    
-    def _save_data(self, filepath: Path, data: Dict[str, Any]):
-        """Save data to compressed JSON file."""
-        with gzip.open(filepath, 'wt', encoding='utf-8') as f:
-            # Encode once, write once. json.dump() streams the document through one
-            # f.write() per JSON fragment (millions of calls on a full run), each
-            # traversing the gzip text wrapper. Output is identical either way.
-            f.write(json.dumps(data, default=self._json_serializer))
-    
+
     def _json_serializer(self, obj):
         """Custom JSON serializer for numpy and torch objects."""
         import numpy as np
@@ -243,7 +279,8 @@ class TrainingFlushSaver:
     this class writes flushed data immediately to disk. This prevents data loss
     when a single training phase has more episodes than can fit in memory.
 
-    Files are created with pattern: {experiment}_{timestamp}_training_phase{phase}_flush{N}.json.gz
+    Files are created with pattern:
+    {experiment}_{timestamp}_training_epoch{E}_phase{N}_flush{F}.json.gz
     """
 
     def __init__(self, config: Dict[str, Any], metrics_manager):
@@ -257,20 +294,24 @@ class TrainingFlushSaver:
         import copy
         self.config = copy.deepcopy(config)
         self.metrics_manager = metrics_manager
+        self.current_epoch = 1
         self.current_phase = 1
-        self.flush_counts = {}  # {phase: flush_count}
+        self.flush_counts = {}  # {(epoch, phase): flush_count}
         self.saved_files = []
 
-    def set_phase(self, phase: int):
+    def set_segment(self, epoch: int, phase: int):
         """
-        Set current phase (called on phase transition).
+        Set the current (epoch, phase) segment, called on phase transition.
+
+        Flush numbering restarts per segment, so a second epoch does not
+        continue the numbering of the same phase in the first.
 
         Args:
+            epoch: Current training epoch, 1-based
             phase: New curriculum phase number
         """
+        self.current_epoch = epoch
         self.current_phase = phase
-        if phase not in self.flush_counts:
-            self.flush_counts[phase] = 0
 
     def create_flush_callback(self) -> Callable:
         """
@@ -293,33 +334,37 @@ class TrainingFlushSaver:
         Args:
             episodes_data: List of episode dictionaries to save
         """
-        phase = self.current_phase
-        self.flush_counts[phase] = self.flush_counts.get(phase, 0) + 1
-        flush_num = self.flush_counts[phase]
+        epoch, phase = self.current_epoch, self.current_phase
+        key = (epoch, phase)
+        self.flush_counts[key] = self.flush_counts.get(key, 0) + 1
+        flush_num = self.flush_counts[key]
 
         saved_path = self.metrics_manager.save_training_flush(
             config=self.config,
             training_data=episodes_data,
+            epoch=epoch,
             phase=phase,
             flush_num=flush_num
         )
         self.saved_files.append(str(saved_path))
-        print(f"   Flush {flush_num} saved for Phase {phase} ({len(episodes_data)} episodes) -> {saved_path.name}")
+        print(f"   Flush {flush_num} saved for Epoch {epoch} Phase {phase} "
+              f"({len(episodes_data)} episodes) -> {saved_path.name}")
 
     def get_saved_files(self) -> list:
         """Return list of all saved flush files."""
         return self.saved_files.copy()
 
-    def get_flush_count(self, phase: int = None) -> int:
+    def get_flush_count(self, epoch: int = None, phase: int = None) -> int:
         """
-        Get flush count for a phase.
+        Get flush count for an (epoch, phase) segment.
 
         Args:
+            epoch: Training epoch (defaults to current epoch)
             phase: Phase number (defaults to current phase)
 
         Returns:
-            Number of flushes for that phase
+            Number of flushes written for that segment
         """
-        if phase is None:
-            phase = self.current_phase
-        return self.flush_counts.get(phase, 0)
+        epoch = self.current_epoch if epoch is None else epoch
+        phase = self.current_phase if phase is None else phase
+        return self.flush_counts.get((epoch, phase), 0)

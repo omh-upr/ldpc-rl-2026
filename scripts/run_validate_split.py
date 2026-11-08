@@ -119,13 +119,12 @@ def analyze_split(h5_file_path, test_size=0.2, verbose=True):
             # Analyze error distribution within phase
             num_errors = metadata['num_errors']
 
-            # Create local masks for this phase's train/test samples
-            local_train_mask = train_mask[global_offset:global_offset+num_samples] - global_offset
-            local_test_mask = test_mask[global_offset:global_offset+num_samples] - global_offset
-
-            # Correct approach: use masks relative to phase data
-            phase_train_errors = num_errors[np.arange(num_samples)[np.isin(phase_indices, train_indices)] - global_offset]
-            phase_test_errors = num_errors[np.arange(num_samples)[np.isin(phase_indices, test_indices)] - global_offset]
+            # train_mask and test_mask are already phase-local booleans of length
+            # num_samples, so they index this phase's metadata directly. Subtracting
+            # global_offset from them, as this once did, pushed every phase after the
+            # first into negative or out-of-range positions.
+            phase_train_errors = num_errors[train_mask]
+            phase_test_errors = num_errors[test_mask]
 
             for error_count in np.unique(num_errors):
                 error_mask = (num_errors == error_count)

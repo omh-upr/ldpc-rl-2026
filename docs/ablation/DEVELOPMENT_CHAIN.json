@@ -1,0 +1,46 @@
+{
+ "generated": "2026-11-07",
+ "source": "config/experiments_config/<config_folder>",
+ "steps": [
+  {
+   "run": "20260905_095822",
+   "config_folder": "64x128_Full_AutoEp",
+   "change": "Tapered epsilon, one epoch (starting point)",
+   "seed": 42,
+   "episodes": 105000,
+   "success": 92.88095238095238,
+   "mean_steps": 5.119761904761905,
+   "gain": null
+  },
+  {
+   "run": "20260906_082214",
+   "config_folder": "64x128_Full_AutoEp_Uniform",
+   "change": "Uniform epsilon across phases",
+   "seed": 42,
+   "episodes": 105000,
+   "success": 93.08,
+   "mean_steps": 5.103323809523809,
+   "gain": 0.1990476190476187
+  },
+  {
+   "run": "20260906_095320",
+   "config_folder": "64x128_Full_Uniform_NoReflip",
+   "change": "Refuse an immediate re-flip",
+   "seed": 42,
+   "episodes": 105000,
+   "success": 94.51047619047618,
+   "mean_steps": 4.953695238095238,
+   "gain": 1.4304761904761847
+  },
+  {
+   "run": "20260906_111741",
+   "config_folder": "64x128_Full_Uniform_3ep",
+   "change": "Three epochs, halving epsilon ladder",
+   "seed": 42,
+   "episodes": 105000,
+   "success": 96.08857142857143,
+   "mean_steps": 4.812028571428572,
+   "gain": 1.5780952380952442
+  }
+ ]
+}

@@ -117,27 +117,42 @@ class LDPCEvaluator(BaseEvaluator):
             print(f"   • {spec.display_name} ({spec.name})")
         
         # Evaluate each agent progressively
+        failures = []
         for spec in agent_specs:
             print(f"\nEvaluating {spec.display_name}...")
-            
+
             try:
                 # Create agent instance
                 agent = self.agent_registry.create_agent(spec)
-                
+
                 # Evaluate single agent with progressive saving
                 saved_file = self._evaluate_single_agent_progressive(agent, spec)
                 self.saved_files.append(saved_file)
-                
+
                 print(f"{spec.display_name} evaluation completed: {saved_file}")
-                
+
             except Exception as e:
+                # Discard this agent's partial file and per-agent saver state, so
+                # nothing of it can reach the next agent's output.
+                self.progressive_saver.abort_phase()
+                failures.append((spec.display_name, e))
                 print(f"Failed to evaluate {spec.display_name}: {e}")
                 continue
 
         print(f"\nProgressive evaluation completed! Saved {len(self.saved_files)} files:")
         for file_path in self.saved_files:
             print(f"   {file_path}")
-        
+
+        if failures:
+            # Every agent that could run has run and its file is on disk. Reporting
+            # success here would describe a comparison that is missing an arm.
+            summary = "; ".join(f"{name}: {error}" for name, error in failures)
+            raise RuntimeError(
+                f"{len(failures)} of {len(agent_specs)} evaluation agents failed "
+                f"({summary}). Results for the agents that completed were saved to "
+                f"{len(self.saved_files)} files and are usable, but the evaluation "
+                f"is incomplete.")
+
         return self.saved_files
     
     def _evaluate_single_agent_progressive(self, agent, agent_spec) -> str:

@@ -1,0 +1,40 @@
+{
+  "seed": 42,
+  "dataset_name": "QuickStart_64x128_Curriculum",
+  "total_samples": 8000,
+  "uniqueness": {
+    "scope": "dataset",
+    "ensure_unique_messages": true,
+    "ensure_unique_error_patterns": false
+  },
+  "curriculum": [
+    {
+      "phase_name": "Phase1_Foundation",
+      "num_samples": 2000,
+      "error_models": [
+        { "type": "uniform_count", "weight": 0.3, "params": { "num_errors": 0 } },
+        { "type": "uniform_count", "weight": 0.7, "params": { "num_errors": 1 } }
+      ]
+    },
+    {
+      "phase_name": "Phase2_Intermediate",
+      "num_samples": 2500,
+      "error_models": [
+        { "type": "uniform_count", "weight": 0.2, "params": { "num_errors": 1 } },
+        { "type": "uniform_count", "weight": 0.5, "params": { "num_errors": 2 } },
+        { "type": "burst",         "weight": 0.3, "params": { "length": [2, 3] } }
+      ]
+    },
+    {
+      "phase_name": "Phase3_Advanced",
+      "num_samples": 3500,
+      "error_models": [
+        { "type": "uniform_count", "weight": 0.1, "params": { "num_errors": 1 } },
+        { "type": "uniform_count", "weight": 0.3, "params": { "num_errors": 2 } },
+        { "type": "uniform_count", "weight": 0.4, "params": { "num_errors": 3 } },
+        { "type": "burst",         "weight": 0.1, "params": { "length": [3, 4] } },
+        { "type": "cluster",       "weight": 0.1, "params": { "radius": 8, "num_errors": 3 } }
+      ]
+    }
+  ]
+}

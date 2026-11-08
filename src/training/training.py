@@ -10,8 +10,12 @@ Updated to use the modular metrics collection framework.
 
 import numpy as np
 import gc
+import sys
 import torch
 from abc import ABC, abstractmethod
+from collections import defaultdict
+
+from src.training import epsilon_schedule
 from typing import Dict, Any, Optional, Tuple
 from src.data.robust_data_generator import RobustDataGenerator
 from src.evaluation.metrics_callbacks import (
@@ -132,8 +136,12 @@ class DQNTrainer(BaseTrainer):
         loss_count = 0
         
         while not done:
-            # Agent selects action
-            action = self.agent.select_action(state, training=training)
+            # Agent selects action. The mask is None unless the environment
+            # restricts the action set, in which case the agent honours it in
+            # both the greedy and the exploring branch.
+            action = self.agent.select_action(
+                state, training=training,
+                action_mask=self.env.get_action_mask())
             next_state, reward, done, info = self.env.step(action)
             
             # Store experience
@@ -152,8 +160,15 @@ class DQNTrainer(BaseTrainer):
                 metrics = self.agent.update((states, actions, rewards, next_states, dones))
                 episode_loss += metrics['loss']
                 loss_count += 1
+
+                # Synchronize on the update that reaches the interval, not on the
+                # episode that happens to end there. Episodes have variable length,
+                # so a boundary test can step straight over a multiple and miss the
+                # synchronization entirely.
                 self.training_steps += 1
-        
+                if self.training_steps % self.target_update_freq == 0:
+                    self.agent.update_target_network()
+
         # Calculate average loss for this episode
         avg_loss = episode_loss / loss_count if loss_count > 0 else 0.0
         
@@ -191,11 +206,10 @@ class DQNTrainer(BaseTrainer):
         for episode in range(num_episodes):
             # Training episode
             episode_data = self.train_episode(training=True, **kwargs)
-            
-            # Target network update
-            if self.training_steps % self.target_update_freq == 0 and self.training_steps > 0:
-                self.agent.update_target_network()
-            
+
+            # Target network synchronization happens inside train_episode, on the
+            # update that reaches the interval.
+
             # Periodic evaluation
             if (episode + 1) % eval_frequency == 0:
                 eval_metrics = self._evaluate(eval_episodes, **kwargs)
@@ -259,7 +273,8 @@ class LDPCTrainer(DQNTrainer):
                  epsilon_phase_reset: bool = False, epsilon_decay=None,
                  epsilon_start=None, epsilon_min=None, epsilon_decay_type=None,
                  collectors: list = None, training_flush_saver=None,
-                 update_frequency: int = 1, **kwargs):
+                 update_frequency: int = 1, epsilon_episode_schedule=None,
+                 **kwargs):
         """
         Initialize LDPC trainer with curriculum learning using RobustDataGenerator.
 
@@ -278,6 +293,9 @@ class LDPCTrainer(DQNTrainer):
             collectors: List of MetricCollector instances (uses defaults if None)
             training_flush_saver: TrainingFlushSaver instance for immediate disk writes on memory limit
             update_frequency: How often to perform gradient updates (every N environment steps, default: 1)
+            epsilon_episode_schedule: Optional callable (epoch, phase, index_in_phase) -> epsilon.
+                When given, epsilon is set from progress through the phase at the
+                start of every episode instead of decaying per gradient update.
         """
         # Filter out kwargs that parent class doesn't accept
         parent_kwargs = {k: v for k, v in kwargs.items()
@@ -293,8 +311,28 @@ class LDPCTrainer(DQNTrainer):
         self.update_frequency = update_frequency
         self.total_env_steps = 0  # Track environment steps separately from training_steps
 
+        # Episode-progress epsilon scheduling. Counted per (epoch, phase), the
+        # same key the flush saver partitions by, so every epoch walks its own
+        # schedule from the phase's first episode and what a later epoch does is
+        # decided by its configured row rather than by a carried-over count.
+        self.epsilon_episode_schedule = epsilon_episode_schedule
+        self._phase_episode_counts = defaultdict(int)
+
+        # Current epoch, and a run-global episode counter. The counter makes
+        # every training episode identifiable on its own, which is what lets
+        # the analysis layer order episodes without depending on file names.
+        self.current_epoch = 1
+        self._episode_seq = 0
+
         # Store memory config for cleanup decisions
         self.memory_config = kwargs.get('memory_config', {})
+
+        # One persistence policy per run. With progressive saving on, each
+        # (epoch, phase) segment is written as it completes and memory limits flush
+        # to disk. With it off, the experiment writes a single file at the end, so
+        # the trainer must not also write and clear segment files: doing both left
+        # that single file holding only the final phase's remainder.
+        self.progressive_saving = self._progressive_saving_enabled(self.memory_config)
         
         # Initialize metrics collection system
         if collectors is None:
@@ -323,150 +361,142 @@ class LDPCTrainer(DQNTrainer):
         self.num_phases = self.data_generator.get_num_phases()
         print(f"Detected {self.num_phases} phases in dataset")
         
-        # Process epsilon decay parameter for dynamic number of phases
-        if epsilon_decay is not None:
-            if isinstance(epsilon_decay, (list, tuple)):
-                if len(epsilon_decay) != self.num_phases:
-                    print(f"Adjusting epsilon_decay from {len(epsilon_decay)} to {self.num_phases} values")
-                    if len(epsilon_decay) > self.num_phases:
-                        # Truncate the list
-                        self.epsilon_decay_schedule = list(epsilon_decay[:self.num_phases])
-                    else:
-                        # Extend the list by repeating the last value (or default if empty)
-                        if len(epsilon_decay) > 0:
-                            last_value = epsilon_decay[-1]
-                            self.epsilon_decay_schedule = list(epsilon_decay) + [last_value] * (self.num_phases - len(epsilon_decay))
-                        else:
-                            # Handle empty list by using agent's default
-                            agent_decay = getattr(agent, 'epsilon_decay', 0.999)
-                            self.epsilon_decay_schedule = [agent_decay] * self.num_phases
-                    print(f"   New epsilon_decay schedule: {self.epsilon_decay_schedule}")
-                else:
-                    self.epsilon_decay_schedule = list(epsilon_decay)
-            else:
-                # Single value - apply to all phases
-                self.epsilon_decay_schedule = [epsilon_decay] * self.num_phases
-        else:
-            # Use agent's current epsilon_decay for all phases
-            agent_decay = getattr(agent, 'epsilon_decay', 0.999)
-            self.epsilon_decay_schedule = [agent_decay] * self.num_phases
-        
-        # Set initial phase epsilon decay
+        # Epsilon fields are normalised to one row per epoch, each holding one
+        # value per phase. A flat config keeps its old meaning and every epoch
+        # reuses that single row; a config written as a list of rows gives each
+        # epoch its own, with the last row covering any epochs beyond it. Both
+        # schedule modes read the same grid, so a config means the same thing
+        # whichever mode it selects.
+        #
+        # The raw values are kept and the grid is built inside `train`, which is
+        # where the epoch count is authoritative. Nothing reads the grid before
+        # then, so there is no second place for the two counts to disagree.
+        self._epsilon_fields = (
+            ('epsilon_decay', epsilon_decay, 0.999, float),
+            ('epsilon_start', epsilon_start, 1.0, float),
+            ('epsilon_min', epsilon_min, 0.05, float),
+            ('epsilon_decay_type', epsilon_decay_type, 'exponential', str),
+        )
+        self._epsilon_grid = {}
+
+    def _build_epsilon_grid(self, num_epochs: int):
+        """
+        Normalise every epsilon field to `num_epochs` rows of per-phase values.
+
+        A field left unset falls back to the agent's own attribute. A field
+        written for a different curriculum length is reshaped rather than
+        rejected, which the trainer has always done, and the adjustment is
+        reported once per field rather than once per epoch row.
+
+        Args:
+            num_epochs: Epochs this run will perform.
+        """
+        for name, raw, default, cast in self._epsilon_fields:
+            value = raw if raw is not None else getattr(self.agent, name, default)
+            if epsilon_schedule.needs_fitting(value, self.num_phases):
+                print(f"Adjusting {name} to {self.num_phases} phases")
+            self._epsilon_grid[name] = epsilon_schedule.as_per_epoch(
+                value, num_epochs, self.num_phases, name, cast=cast, fit=True)
+
+    def _apply_epoch_schedules(self, epoch: int):
+        """
+        Install one epoch's epsilon schedule as the active per-phase schedule.
+
+        Called once per epoch so that the phase-transition handler, which reads
+        the per-phase lists, picks up the row belonging to the epoch it is in.
+        Epochs past the configured rows clamp to the last one, which is the
+        same reuse-last rule the config normalisation applies.
+
+        Epsilon itself is reset to the opening value of the epoch's first phase,
+        independently of `epsilon_phase_reset`. That flag governs transitions
+        within an epoch; an epoch's own starting value has to take effect or a
+        per-epoch schedule row would have no way to be honoured.
+
+        Args:
+            epoch: 1-based epoch number.
+        """
+        grid = self._epsilon_grid
+        e = max(0, min(epoch - 1, len(grid['epsilon_start']) - 1))
+        self.epsilon_decay_schedule = list(grid['epsilon_decay'][e])
+        self.epsilon_start_schedule = list(grid['epsilon_start'][e])
+        self.epsilon_min_schedule = list(grid['epsilon_min'][e])
+        self.epsilon_decay_type_schedule = list(grid['epsilon_decay_type'][e])
+
+        # Re-seed the agent from this epoch's first phase. The phase-transition
+        # handler overwrites these as soon as the curriculum moves, so this only
+        # has to be right for the phase the epoch opens on.
         self.current_phase_epsilon_decay = self.epsilon_decay_schedule[0]
-        self.agent.set_epsilon_decay(self.current_phase_epsilon_decay)
-        
-        # Process epsilon_start parameter for dynamic number of phases
-        if epsilon_start is not None:
-            if isinstance(epsilon_start, (list, tuple)):
-                if len(epsilon_start) != self.num_phases:
-                    print(f"Adjusting epsilon_start from {len(epsilon_start)} to {self.num_phases} values")
-                    if len(epsilon_start) > self.num_phases:
-                        self.epsilon_start_schedule = list(epsilon_start[:self.num_phases])
-                    else:
-                        if len(epsilon_start) > 0:
-                            last_value = epsilon_start[-1]
-                            self.epsilon_start_schedule = list(epsilon_start) + [last_value] * (self.num_phases - len(epsilon_start))
-                        else:
-                            agent_start = getattr(agent, 'epsilon_start', 1.0)
-                            self.epsilon_start_schedule = [agent_start] * self.num_phases
-                    print(f"   New epsilon_start schedule: {self.epsilon_start_schedule}")
-                else:
-                    self.epsilon_start_schedule = list(epsilon_start)
-            else:
-                self.epsilon_start_schedule = [epsilon_start] * self.num_phases
-        else:
-            agent_start = getattr(agent, 'epsilon_start', 1.0)
-            self.epsilon_start_schedule = [agent_start] * self.num_phases
-        
-        # Process epsilon_min parameter for dynamic number of phases
-        if epsilon_min is not None:
-            if isinstance(epsilon_min, (list, tuple)):
-                if len(epsilon_min) != self.num_phases:
-                    print(f"Adjusting epsilon_min from {len(epsilon_min)} to {self.num_phases} values")
-                    if len(epsilon_min) > self.num_phases:
-                        self.epsilon_min_schedule = list(epsilon_min[:self.num_phases])
-                    else:
-                        if len(epsilon_min) > 0:
-                            last_value = epsilon_min[-1]
-                            self.epsilon_min_schedule = list(epsilon_min) + [last_value] * (self.num_phases - len(epsilon_min))
-                        else:
-                            agent_min = getattr(agent, 'epsilon_min', 0.05)
-                            self.epsilon_min_schedule = [agent_min] * self.num_phases
-                    print(f"   New epsilon_min schedule: {self.epsilon_min_schedule}")
-                else:
-                    self.epsilon_min_schedule = list(epsilon_min)
-            else:
-                self.epsilon_min_schedule = [epsilon_min] * self.num_phases
-        else:
-            agent_min = getattr(agent, 'epsilon_min', 0.05)
-            self.epsilon_min_schedule = [agent_min] * self.num_phases
-        
-        # Process epsilon_decay_type parameter for dynamic number of phases
-        if epsilon_decay_type is not None:
-            if isinstance(epsilon_decay_type, (list, tuple)):
-                if len(epsilon_decay_type) != self.num_phases:
-                    print(f"Adjusting epsilon_decay_type from {len(epsilon_decay_type)} to {self.num_phases} values")
-                    if len(epsilon_decay_type) > self.num_phases:
-                        self.epsilon_decay_type_schedule = list(epsilon_decay_type[:self.num_phases])
-                    else:
-                        if len(epsilon_decay_type) > 0:
-                            last_value = epsilon_decay_type[-1]
-                            self.epsilon_decay_type_schedule = list(epsilon_decay_type) + [last_value] * (self.num_phases - len(epsilon_decay_type))
-                        else:
-                            agent_decay_type = getattr(agent, 'epsilon_decay_type', 'exponential')
-                            self.epsilon_decay_type_schedule = [agent_decay_type] * self.num_phases
-                    print(f"   New epsilon_decay_type schedule: {self.epsilon_decay_type_schedule}")
-                else:
-                    self.epsilon_decay_type_schedule = list(epsilon_decay_type)
-            else:
-                self.epsilon_decay_type_schedule = [epsilon_decay_type] * self.num_phases
-        else:
-            agent_decay_type = getattr(agent, 'epsilon_decay_type', 'exponential')
-            self.epsilon_decay_type_schedule = [agent_decay_type] * self.num_phases
-        
-        # Set initial phase epsilon parameters
         self.current_phase_epsilon_start = self.epsilon_start_schedule[0]
         self.current_phase_epsilon_min = self.epsilon_min_schedule[0]
         self.current_phase_epsilon_decay_type = self.epsilon_decay_type_schedule[0]
+        self.agent.set_epsilon_decay(self.current_phase_epsilon_decay)
         self.agent.set_epsilon_start(self.current_phase_epsilon_start)
         self.agent.set_epsilon_min(self.current_phase_epsilon_min)
         self.agent.set_epsilon_decay_type(self.current_phase_epsilon_decay_type)
-        
-    
+        self.agent.epsilon = self.current_phase_epsilon_start
+
+
     # Note: _create_curriculum_schedule method removed - curriculum is now embedded in RobustDataGenerator
     
-    def _handle_phase_transition(self, old_phase: int, new_phase: int, episode_count: int, config: dict = None, external_metrics_manager = None):
+    @staticmethod
+    def _progressive_saving_enabled(memory_config: dict) -> bool:
         """
-        Handle curriculum phase transitions with epsilon management and incremental saving.
-        
+        Read enable_progressive_saving, accepting either config structure.
+
+        The current form nests settings under 'training' and 'evaluation'; the
+        older flat form keeps them at the top level. Default is True, matching
+        every shipped configuration.
+        """
+        if not memory_config:
+            return True
+        if 'training' in memory_config:
+            return memory_config.get('training', {}).get('enable_progressive_saving', True)
+        return memory_config.get('enable_progressive_saving', True)
+
+    def _handle_segment_transition(self, closing_epoch: int, old_phase: int,
+                                   new_epoch: int, new_phase: int, episode_count: int,
+                                   config: dict = None, external_metrics_manager = None):
+        """
+        Close one (epoch, phase) segment and open the next.
+
+        Keyed on the pair rather than on the phase alone. A curriculum of a single
+        phase keeps the same phase number across epochs, so a phase-only test never
+        fired: every flush file stayed labelled with the first epoch and the closing
+        file mixed epochs together.
+
         Args:
-            old_phase: Previous curriculum phase
-            new_phase: New curriculum phase
+            closing_epoch: Epoch of the segment being closed
+            old_phase: Curriculum phase of the segment being closed
+            new_epoch: Epoch of the segment being opened
+            new_phase: Curriculum phase of the segment being opened
             episode_count: Current episode count
             config: Experiment configuration for saving
             external_metrics_manager: External metrics manager for saving partial results
         """
-        print(f"\nTransitioning from Phase {old_phase} to Phase {new_phase} at episode {episode_count}")
+        print(f"\nTransitioning from Epoch {closing_epoch} Phase {old_phase} to "
+              f"Epoch {new_epoch} Phase {new_phase} at episode {episode_count}")
 
-        # Update training flush saver's current phase for new flush files
+        # Update training flush saver's current segment for new flush files
         if self.training_flush_saver is not None:
-            self.training_flush_saver.set_phase(new_phase)
-            print(f"   Updated flush saver to Phase {new_phase}")
+            self.training_flush_saver.set_segment(new_epoch, new_phase)
+            print(f"   Updated flush saver to Epoch {new_epoch} Phase {new_phase}")
 
         # Save and clear accumulated training data for the completed phase to free memory
-        if config is not None and external_metrics_manager is not None:
+        if self.progressive_saving and config is not None and external_metrics_manager is not None:
             episode_collector = self.metrics_manager.get_collector('EpisodeDataCollector')
-            if episode_collector and episode_collector.episodes:
+            if episode_collector is not None and episode_collector.episodes:
                 phase_data = episode_collector.get_results().copy()  # Get a copy of the data
                 if phase_data:
                     # Save phase data using external metrics manager
                     saved_path = external_metrics_manager.save_training_partial(
-                        config=config, 
-                        training_data=phase_data, 
+                        config=config,
+                        training_data=phase_data,
+                        epoch=closing_epoch,
                         phase=old_phase,
                         clear_memory=False  # We'll clear manually for more control
                     )
-                    print(f"   Saved Phase {old_phase} data ({len(phase_data)} episodes) to {saved_path.name}")
+                    print(f"   Saved Epoch {closing_epoch} Phase {old_phase} data "
+                          f"({len(phase_data)} episodes) to {saved_path.name}")
                     
                     # Clear the episode collector to free memory
                     episode_collector.reset()
@@ -480,41 +510,56 @@ class LDPCTrainer(DQNTrainer):
         
         # Update epsilon parameters for new phase (with bounds checking)
         phase_index = max(0, min(new_phase - 1, len(self.epsilon_decay_schedule) - 1))
-        
-        # Update epsilon decay
-        old_decay = self.current_phase_epsilon_decay
+
+        # Under the episode schedule these fields are inert: the decay rate is
+        # zero and epsilon is rewritten at the start of the next episode. They
+        # are still applied so the agent's own state stays consistent, but
+        # reporting them would announce values that never take effect, so the
+        # log reports the schedule's own numbers instead.
+        scheduled = self.epsilon_episode_schedule is not None
+        previous = (self.current_phase_epsilon_decay,
+                    self.current_phase_epsilon_start,
+                    self.current_phase_epsilon_min,
+                    self.current_phase_epsilon_decay_type)
+
         self.current_phase_epsilon_decay = self.epsilon_decay_schedule[phase_index]
-        self.agent.set_epsilon_decay(self.current_phase_epsilon_decay)
-        print(f"   Epsilon decay: {old_decay:.6f} → {self.current_phase_epsilon_decay:.6f}")
-        
-        # Update epsilon start
-        old_start = self.current_phase_epsilon_start
         self.current_phase_epsilon_start = self.epsilon_start_schedule[phase_index]
-        self.agent.set_epsilon_start(self.current_phase_epsilon_start)
-        print(f"   Epsilon start: {old_start:.4f} → {self.current_phase_epsilon_start:.4f}")
-        
-        # Update epsilon min
-        old_min = self.current_phase_epsilon_min
         self.current_phase_epsilon_min = self.epsilon_min_schedule[phase_index]
-        self.agent.set_epsilon_min(self.current_phase_epsilon_min)
-        print(f"   Epsilon min: {old_min:.4f} → {self.current_phase_epsilon_min:.4f}")
-        
-        # Update epsilon decay type
-        old_decay_type = self.current_phase_epsilon_decay_type
         self.current_phase_epsilon_decay_type = self.epsilon_decay_type_schedule[phase_index]
+        self.agent.set_epsilon_decay(self.current_phase_epsilon_decay)
+        self.agent.set_epsilon_start(self.current_phase_epsilon_start)
+        self.agent.set_epsilon_min(self.current_phase_epsilon_min)
         self.agent.set_epsilon_decay_type(self.current_phase_epsilon_decay_type)
-        print(f"   Epsilon decay type: {old_decay_type} → {self.current_phase_epsilon_decay_type}")
-        
+
         # Reset training step count for linear decay when transitioning phases
-        if self.current_phase_epsilon_decay_type == "linear":
+        linear = self.current_phase_epsilon_decay_type == "linear"
+        if linear:
             self.agent.reset_training_step_count()
-            print(f"   Reset training step count for linear decay")
-        
+
         # Reset epsilon if requested (use current phase's epsilon_start)
-        if self.epsilon_phase_reset and hasattr(self.agent, 'epsilon'):
-            old_epsilon = self.agent.epsilon
+        reset = self.epsilon_phase_reset and hasattr(self.agent, 'epsilon')
+        if reset:
             self.agent.epsilon = self.current_phase_epsilon_start
-            print(f"   Epsilon reset: {old_epsilon:.4f} → {self.agent.epsilon:.4f}")
+
+        if scheduled:
+            # Index 0 is the phase's opening value and a large index is past
+            # every anneal span, so both ends come from the schedule itself
+            # rather than from a second copy of the same numbers.
+            opening = self.epsilon_episode_schedule(self.current_epoch, new_phase, 0)
+            floor = self.epsilon_episode_schedule(self.current_epoch, new_phase, sys.maxsize)
+            detail = (f"{opening:.4f} annealing to {floor:.4f}"
+                      if opening > floor else f"held at {opening:.4f}")
+            print(f"   Epsilon (epoch {self.current_epoch} schedule): {detail}")
+        else:
+            old_decay, old_start, old_min, old_decay_type = previous
+            print(f"   Epsilon decay: {old_decay:.6f} → {self.current_phase_epsilon_decay:.6f}")
+            print(f"   Epsilon start: {old_start:.4f} → {self.current_phase_epsilon_start:.4f}")
+            print(f"   Epsilon min: {old_min:.4f} → {self.current_phase_epsilon_min:.4f}")
+            print(f"   Epsilon decay type: {old_decay_type} → {self.current_phase_epsilon_decay_type}")
+            if linear:
+                print(f"   Reset training step count for linear decay")
+            if reset:
+                print(f"   Epsilon reset to {self.agent.epsilon:.4f}")
         
     def train_episode(self, sample: Dict[str, Any] = None, training: bool = True,
                     episode_type: str = None, **kwargs) -> Dict[str, Any]:
@@ -565,11 +610,13 @@ class LDPCTrainer(DQNTrainer):
         if episode_type is None:
             episode_type = 'train' if training else 'val'
 
-        # Prepare episode metadata for collectors
+        # Prepare episode metadata for collectors. episode_id counts the whole
+        # run rather than the current collector, which resets on every flush.
         episode_metadata = {
-            'episode_id': self.metrics_manager.get_collector('EpisodeDataCollector').__len__(),
+            'episode_id': self._episode_seq,
             'episode_type': episode_type,
             'agent_type': 'agent',
+            'epoch': self.current_epoch,
             'phase': phase,
             'original_codeword': original_codeword,
             'noisy_codeword': noisy_codeword,
@@ -582,6 +629,7 @@ class LDPCTrainer(DQNTrainer):
         
         # Only notify collectors for training episodes (not evaluation episodes)
         if training:
+            self._episode_seq += 1
             self.metrics_manager.on_episode_begin(episode_metadata)
         
         # Reset environment with LDPC-specific data
@@ -594,41 +642,27 @@ class LDPCTrainer(DQNTrainer):
         training_steps = 0
         step_number = 0
         
+        # Nothing may carry over from the previous episode: a pending update
+        # belongs to the step that produced it, and that step has been recorded.
+        self.agent.last_training_update = None
+
         while not done:
-            # Agent selects action
-            action = self.agent.select_action(state, training=training)
+            # Agent selects action. The mask is None unless the environment
+            # restricts the action set, in which case the agent honours it in
+            # both the greedy and the exploring branch.
+            action = self.agent.select_action(
+                state, training=training,
+                action_mask=self.env.get_action_mask())
             next_state, reward, done, info = self.env.step(action)
-            
-            # Prepare step data for collectors
-            step_data = {
-                'step_number': step_number,
-                'state': self.env.extract_state_components(state),
-                'next_state': self.env.extract_state_components(next_state),
-                'action': action,
-                'reward': reward,
-                'done': done,
-                'info': info,
-            }
-            
-            # Add training update if available (from agent training step)
-            if hasattr(self.agent, 'last_training_update') and self.agent.last_training_update is not None:
-                step_data['training_update'] = self.agent.last_training_update
-                self.agent.last_training_update = None  # Clear after use
-            
-            # Only notify collectors for training episodes (not evaluation episodes)
-            if training:
-                self.metrics_manager.on_step_end(step_data)
-            
-            # Store experience
+
+            # Store experience before this step's update, so the transition just
+            # taken is available to the batch it is about to be sampled into.
             if training:
                 self.replay_buffer.push(state, action, reward, next_state, done)
-            
-            state = next_state
-            total_reward += reward
-            episode_length += 1
-            step_number += 1
-            
-            # Training update (Phase 1.1: gated by update_frequency)
+
+            # This step's gradient update runs before the step is recorded, so the
+            # loss, epsilon and Q-value statistics it produces are attached to the
+            # step that produced them rather than to the following one.
             if training and len(self.replay_buffer) >= self.min_replay_size:
                 self.total_env_steps += 1
 
@@ -649,7 +683,39 @@ class LDPCTrainer(DQNTrainer):
                     episode_loss += metrics['loss']
                     loss_count += 1
                     training_steps += 1
-        
+
+                    # Synchronize on the update that reaches the interval. Testing
+                    # this at the episode boundary steps over most multiples,
+                    # because episode length varies and rarely divides the interval.
+                    self.training_steps += 1
+                    if self.training_steps % self.target_update_freq == 0:
+                        self.agent.update_target_network()
+
+            # Prepare step data for collectors
+            step_data = {
+                'step_number': step_number,
+                'state': self.env.extract_state_components(state),
+                'next_state': self.env.extract_state_components(next_state),
+                'action': action,
+                'reward': reward,
+                'done': done,
+                'info': info,
+            }
+
+            # Attach this step's own training update, if it performed one
+            if getattr(self.agent, 'last_training_update', None) is not None:
+                step_data['training_update'] = self.agent.last_training_update
+                self.agent.last_training_update = None  # Clear after use
+
+            # Only notify collectors for training episodes (not evaluation episodes)
+            if training:
+                self.metrics_manager.on_step_end(step_data)
+
+            state = next_state
+            total_reward += reward
+            episode_length += 1
+            step_number += 1
+
         # Calculate average loss
         avg_loss = episode_loss / loss_count if loss_count > 0 else 0.0
         
@@ -683,7 +749,8 @@ class LDPCTrainer(DQNTrainer):
         return episode_summary
     
     def train(self, num_epochs: int, eval_frequency: int = 2000, 
-              eval_episodes: int = 25, config: dict = None, external_metrics_manager = None, **kwargs) -> Dict[str, Any]:
+              eval_episodes: int = 25, config: dict = None, external_metrics_manager = None,
+              on_epoch_end = None, **kwargs) -> Dict[str, Any]:
         """
         Executes LDPC training using RobustDataGenerator with curriculum learning.
         
@@ -691,6 +758,12 @@ class LDPCTrainer(DQNTrainer):
             num_epochs: Number of training epochs (full passes through dataset)
             eval_frequency: Frequency of evaluation runs (in episodes)
             eval_episodes: Number of episodes per evaluation
+            on_epoch_end: Called with the 1-based epoch number once that epoch's
+                last episode has been trained on. An epoch boundary is the only
+                point at which the weights represent a complete pass over the
+                curriculum, and it is the only chance to capture them: training
+                overwrites them on the next pass. Nothing here knows where models
+                are stored, so the caller decides what to do with the moment.
             config: Experiment configuration for incremental saving
             external_metrics_manager: External metrics manager for saving partial results
             
@@ -702,34 +775,54 @@ class LDPCTrainer(DQNTrainer):
         # Initialize metrics collection for training
         self.metrics_manager.reset_all()
         
-        # Track phases and basic counters (still needed for phase transitions)
+        # Track the (epoch, phase) segment and basic counters. Gradient updates
+        # are counted by self.training_steps, incremented inside train_episode
+        # where the target network is also synchronized, so there is one
+        # authoritative counter rather than a loop copy that can disagree.
         current_phase = 1
-        total_training_steps = 0
+        current_segment = (1, 1)
         episode_count = 0
-        
+
+        self._build_epsilon_grid(num_epochs)
+
         for epoch in range(num_epochs):
-            print(f"\nStarting epoch {epoch + 1}/{num_epochs}")
-            
+            self.current_epoch = epoch + 1
+            self._apply_epoch_schedules(self.current_epoch)
+            print(f"\nStarting epoch {self.current_epoch}/{num_epochs}")
+
             # Iterate through training data
             for sample in self.data_generator.get_iterator('train'):
                 # Get actual phase from dataset
                 phase = sample['phase']
-                
-                # Check for phase transition
-                if phase > current_phase:
-                    self._handle_phase_transition(current_phase, phase, episode_count, config, external_metrics_manager)
+
+                # A segment is one (epoch, phase) pair, so a transition is any
+                # change to that pair: a new phase within an epoch, the drop back
+                # to phase 1 when a new epoch restarts the curriculum, and the
+                # epoch boundary itself when the curriculum has only one phase.
+                segment = (self.current_epoch, phase)
+                if segment != current_segment:
+                    self._handle_segment_transition(
+                        current_segment[0], current_segment[1], self.current_epoch, phase,
+                        episode_count, config, external_metrics_manager)
+                    current_segment = segment
                     current_phase = phase
                 
+                # Epsilon from progress through this phase, when scheduled that
+                # way. Set before the episode so every step within it explores
+                # at the same rate; the agent's own per-update decay is a no-op
+                # here because the resolved decay rate is zero.
+                if self.epsilon_episode_schedule is not None:
+                    key = (self.current_epoch, phase)
+                    index = self._phase_episode_counts[key]
+                    self._phase_episode_counts[key] = index + 1
+                    self.agent.epsilon = self.epsilon_episode_schedule(
+                        self.current_epoch, phase, index)
+
                 # Training episode with dataset sample (now handles metrics automatically)
                 episode_data = self.train_episode(sample, training=True)
-                
-                total_training_steps += episode_data['training_steps']
+
                 episode_count += 1
-                
-                # Target network update
-                if total_training_steps % self.target_update_freq == 0 and total_training_steps > 0:
-                    self.agent.update_target_network()
-                
+
                 # Periodic evaluation
                 if episode_count % eval_frequency == 0:
                     eval_metrics = self._evaluate_dataset(eval_episodes, current_phase)
@@ -738,20 +831,25 @@ class LDPCTrainer(DQNTrainer):
                           f"Avg Reward: {eval_metrics['avg_reward']:.2f}, "
                           f"Avg Steps: {eval_metrics['avg_length']:.1f}, "
                           f"Epsilon: {episode_data['epsilon']:.3f}")
-        
+
+            if on_epoch_end is not None:
+                on_epoch_end(self.current_epoch)
+
         # Save any remaining training data from the final phase and cleanup memory
-        if config is not None and external_metrics_manager is not None:
+        if self.progressive_saving and config is not None and external_metrics_manager is not None:
             episode_collector = self.metrics_manager.get_collector('EpisodeDataCollector')
-            if episode_collector and episode_collector.episodes:
+            if episode_collector is not None and episode_collector.episodes:
                 final_phase_data = episode_collector.get_results().copy()
                 if final_phase_data:
                     saved_path = external_metrics_manager.save_training_partial(
-                        config=config, 
-                        training_data=final_phase_data, 
+                        config=config,
+                        training_data=final_phase_data,
+                        epoch=self.current_epoch,
                         phase=current_phase,
                         clear_memory=False
                     )
-                    print(f"Saved final Phase {current_phase} data ({len(final_phase_data)} episodes) to {saved_path.name}")
+                    print(f"Saved final Epoch {self.current_epoch} Phase {current_phase} data "
+                          f"({len(final_phase_data)} episodes) to {saved_path.name}")
                     
                     # Clear the final phase data but keep collectors for final evaluation
                     del final_phase_data
@@ -766,21 +864,19 @@ class LDPCTrainer(DQNTrainer):
         # Get final metrics from collectors AFTER final evaluation
         collector_results = self.metrics_manager.get_all_results()
         
-        # NOW do the final memory cleanup after everything is collected
-        # Check if progressive saving is enabled (handle both old and new config structures)
-        enable_progressive = False
-        if hasattr(self, 'memory_config'):
-            if 'training' in self.memory_config:
-                # New hierarchical structure
-                enable_progressive = self.memory_config.get('training', {}).get('enable_progressive_saving', False)
-            else:
-                # Legacy flat structure
-                enable_progressive = self.memory_config.get('enable_progressive_saving', False)
-        
-        if enable_progressive:
+        # NOW do the final memory cleanup after everything is collected. The policy
+        # was resolved once in the constructor; recomputing it here had drifted to
+        # the opposite default and could disagree with the flag the run acted on.
+        #
+        # The policy alone is not enough to authorize clearing. Segments are only
+        # written when a config and an external metrics manager were supplied, so
+        # without them nothing reached disk and clearing would discard the whole run.
+        segments_were_saved = config is not None and external_metrics_manager is not None
+        if self.progressive_saving and segments_were_saved:
             # With progressive saving, clear collectors completely after final eval
             episode_collector = self.metrics_manager.get_collector('EpisodeDataCollector')
-            if episode_collector:
+            # An empty collector is falsey, so test for the lookup, not the contents.
+            if episode_collector is not None:
                 episode_collector.reset()
                 print(f"   Cleared {episode_collector.__class__.__name__} after final evaluation")
             gc.collect()
@@ -792,7 +888,7 @@ class LDPCTrainer(DQNTrainer):
         summary = {
             'total_epochs': num_epochs,
             'total_episodes': episode_count,
-            'total_training_steps': total_training_steps,
+            'total_training_steps': self.training_steps,
             'final_epsilon': self.agent.epsilon,
             'final_evaluation': final_eval,
             'collector_results': collector_results

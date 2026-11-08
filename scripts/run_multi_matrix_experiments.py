@@ -416,15 +416,30 @@ class StageExecutor:
 
         # Import and call directly (more efficient than subprocess for this)
         try:
-            from src.data.create_dataset import create_ldpc_dataset
+            from src.data.create_dataset import create_ldpc_dataset, validate_existing_dataset
+            from src.core.ldpc_code import LDPC_Code
             from src.utils.path_utils import resolve_project_path
 
             resolved_output = resolve_project_path(output_path)
 
-            # Check if dataset already exists
+            # Reuse only a dataset that matches what this stage was asked to build
             if resolved_output.exists():
-                self._log(f"Dataset already exists: {resolved_output}")
-                return True
+                # Pass the code as well: without it the validator skips its width
+                # check, and a dataset built for another code would be reused on
+                # the strength of a matching curriculum config alone.
+                matches, reason = validate_existing_dataset(
+                    resolved_output, config_path, test_size=test_size,
+                    code=LDPC_Code.from_default(code_id=code_id))
+                if matches:
+                    self._log(f"Dataset already exists and matches the config: "
+                              f"{resolved_output} ({reason})")
+                    return True
+                self._log_stage_failure(
+                    stage_name,
+                    f"{resolved_output} exists but does not match {config_path}: {reason}. "
+                    f"Remove it or point the config elsewhere; reusing it would train on "
+                    f"data the configuration did not ask for.")
+                return False
 
             self._log(f"Creating main dataset...")
             self._log(f"   Config: {config_path}")
@@ -479,14 +494,29 @@ class StageExecutor:
 
         # Reuse same function as Stage 1
         try:
-            from src.data.create_dataset import create_ldpc_dataset
+            from src.data.create_dataset import create_ldpc_dataset, validate_existing_dataset
+            from src.core.ldpc_code import LDPC_Code
             from src.utils.path_utils import resolve_project_path
 
             resolved_output = resolve_project_path(output_path)
 
             if resolved_output.exists():
-                self._log(f"Expert dataset already exists: {resolved_output}")
-                return True
+                # Pass the code as well: without it the validator skips its width
+                # check, and a dataset built for another code would be reused on
+                # the strength of a matching curriculum config alone.
+                matches, reason = validate_existing_dataset(
+                    resolved_output, config_path, test_size=test_size,
+                    code=LDPC_Code.from_default(code_id=code_id))
+                if matches:
+                    self._log(f"Expert dataset already exists and matches the config: "
+                              f"{resolved_output} ({reason})")
+                    return True
+                self._log_stage_failure(
+                    stage_name,
+                    f"{resolved_output} exists but does not match {config_path}: {reason}. "
+                    f"Several 64x128 variants share this path while asking for different "
+                    f"sample counts, so remove it or give this variant its own path.")
+                return False
 
             self._log(f"Creating expert dataset...")
             self._log(f"   Config: {config_path}")
@@ -853,9 +883,19 @@ class MultiMatrixOrchestrator:
             return False
         self._log(f"All configurations valid for {folder_name}")
 
-        # Define output paths (following MASTER_EXPERIMENT_DESIGN_REVISED.md)
-        main_dataset = f"data/ldpc_{code_id}_main_dataset.h5"
-        expert_dataset = f"data/ldpc_{code_id}_expert_dataset.h5"
+        # Output paths and the split come from the configurations that own them,
+        # not from constants here. Stage 4 declares the main dataset it will
+        # train on, stage 3 declares the expert dataset it will read, and stage 1
+        # must produce the split stage 4 expects: a dataset created here with a
+        # different test_size persists, because these configs do not force
+        # recreation, and training then runs on a split nobody asked for.
+        dataset_settings = self._read_dataset_settings(
+            code_id, config_paths['stage4'], config_paths['stage3'])
+        main_dataset = dataset_settings['main_dataset']
+        expert_dataset = dataset_settings['expert_dataset']
+        test_size = dataset_settings['test_size']
+        self._log(f"\nMain dataset:   {main_dataset} (test_size={test_size})")
+        self._log(f"Expert dataset: {expert_dataset}")
 
         # Stage 1: Main dataset
         if 1 not in self.skip_stages:
@@ -863,7 +903,7 @@ class MultiMatrixOrchestrator:
                 code_id=code_id,
                 config_path=config_paths['stage1'],
                 output_path=main_dataset,
-                test_size=0.3
+                test_size=test_size
             )
             if not success:
                 return False
@@ -876,7 +916,7 @@ class MultiMatrixOrchestrator:
                 code_id=code_id,
                 config_path=config_paths['stage2'],
                 output_path=expert_dataset,
-                test_size=0.3
+                test_size=test_size
             )
             if not success:
                 return False
@@ -915,6 +955,46 @@ class MultiMatrixOrchestrator:
 
         self._log(f"\nAll stages completed successfully for {folder_name}")
         return True
+
+    def _read_dataset_settings(self, code_id: str, stage4_path: Path,
+                               stage3_path: Path) -> Dict:
+        """
+        Resolve dataset paths and the train/test split from the configurations.
+
+        Stage 4 owns the main dataset it trains on and the split it expects;
+        stage 3 owns the expert dataset it reads. The naming convention only
+        covers a field a configuration omits. A configuration that cannot be
+        read raises, since guessing a path here would create a dataset the
+        later stages never use.
+
+        Args:
+            code_id: LDPC code identifier, used only for the fallback names
+            stage4_path: Path to experiment_config.yml
+            stage3_path: Path to expert_experience_config.yml
+
+        Returns:
+            Dict with 'main_dataset', 'expert_dataset' and 'test_size'
+        """
+        settings = {
+            'main_dataset': f"data/ldpc_{code_id}_main_dataset.h5",
+            'expert_dataset': f"data/ldpc_{code_id}_expert_dataset.h5",
+            'test_size': 0.3
+        }
+
+        with open(stage4_path, 'r') as f:
+            stage4 = yaml.safe_load(f) or {}
+        creation = stage4.get('dataset_creation', {}) or {}
+        if creation.get('output_path'):
+            settings['main_dataset'] = creation['output_path']
+        if creation.get('test_size') is not None:
+            settings['test_size'] = creation['test_size']
+
+        with open(stage3_path, 'r') as f:
+            stage3 = yaml.safe_load(f) or {}
+        if stage3.get('dataset'):
+            settings['expert_dataset'] = stage3['dataset']
+
+        return settings
 
     def _log(self, message: str):
         """Write to both console and log file."""

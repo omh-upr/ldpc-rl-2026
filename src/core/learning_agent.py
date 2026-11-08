@@ -114,10 +114,16 @@ class DQNAgent(LearningAgent):
                  network_config: Optional[Dict[str, Any]] = None,
                  weight_decay: float = 0.0,
                  device: Optional[str] = None,
-                 strict_device: bool = True):
+                 strict_device: bool = True,
+                 forbid_immediate_reflip: bool = False):
         
         self._state_dim = state_dim
         self._action_dim = action_dim
+        # Mirrors the environment flag of the same name. The agent needs it for the
+        # bootstrap target: the action that produced a transition is exactly the one
+        # the environment will refuse in the state it led to, so leaving it in the
+        # max would train towards a value the policy can never collect.
+        self.forbid_immediate_reflip = forbid_immediate_reflip
         self.gamma = gamma
         self.epsilon = epsilon_start
         self.epsilon_start = epsilon_start  # Store for potential resets
@@ -214,24 +220,37 @@ class DQNAgent(LearningAgent):
     def select_action(self, state: np.ndarray, training: bool = True, **kwargs) -> int:
         """
         Selects an action using an epsilon-greedy policy.
-        
+
         Args:
             state: Current state observation
             training: Whether agent is in training mode (affects exploration)
-            **kwargs: Additional parameters (ignored by DQN agent)
-            
+            **kwargs: `action_mask`, a boolean array over the action space, or
+                None when every action is available. Both branches of the
+                epsilon-greedy choice honour it, so a masked action is never
+                taken by exploration either. Other keys are ignored.
+
         Returns:
             int: Selected action
         """
+        action_mask = kwargs.get('action_mask', None)
+
         if training and np.random.rand() <= self.epsilon:
-            return np.random.randint(self._action_dim)
-        
+            if action_mask is None:
+                return np.random.randint(self._action_dim)
+            allowed = np.flatnonzero(action_mask)
+            return int(allowed[np.random.randint(allowed.size)])
+
         with torch.no_grad():
             # as_tensor avoids the copy FloatTensor(state) always makes; the
             # environment already produces float32 states, so this is a view in the
             # common case while still converting correctly for any other dtype.
             state_tensor = torch.as_tensor(state, dtype=torch.float32).unsqueeze(0).to(self.device)
             q_values = self.network(state_tensor)
+            if action_mask is not None:
+                allowed = torch.as_tensor(action_mask, device=q_values.device)
+                # finfo.min rather than -inf: a fully masked row would make the
+                # argmax undefined with -inf, and this keeps the value finite.
+                q_values = q_values.masked_fill(~allowed, torch.finfo(q_values.dtype).min)
             return q_values.argmax().item()
 
     def update(self, batch) -> Dict[str, float]:
@@ -271,14 +290,30 @@ class DQNAgent(LearningAgent):
         # Get current Q values
         q_values = self.network(states).gather(1, actions)
 
-        # Get next Q values from target network
-        next_q_values = self.target_network(next_states).max(1)[0].unsqueeze(1)
-        
-        # Compute the expected Q values
-        expected_q_values = rewards + self.gamma * next_q_values * (1 - dones)
+        # Get next Q values from target network. Nothing downstream of the target
+        # network is differentiated, so building a graph for it only allocates
+        # saved activations that the backward pass never reads.
+        with torch.no_grad():
+            next_q = self.target_network(next_states)
+
+            if self.forbid_immediate_reflip:
+                # The environment forbids undoing the flip just made, so in the
+                # next state the action that produced the transition is illegal.
+                # It is already in the batch, which is why no mask has to be
+                # stored alongside each transition. STOP ends the episode, so
+                # only flip actions are excluded.
+                is_flip = actions < (self._action_dim - 1)
+                taken_q = next_q.gather(1, actions)
+                blocked = torch.full_like(taken_q, torch.finfo(next_q.dtype).min)
+                next_q = next_q.scatter(1, actions, torch.where(is_flip, blocked, taken_q))
+
+            next_q_values = next_q.max(1)[0].unsqueeze(1)
+
+            # Compute the expected Q values
+            expected_q_values = rewards + self.gamma * next_q_values * (1 - dones)
 
         # Compute loss
-        loss = self.loss_fn(q_values, expected_q_values.detach())
+        loss = self.loss_fn(q_values, expected_q_values)
 
         # Optimize the model
         self.optimizer.zero_grad()

@@ -1,0 +1,106 @@
+# QuickStart smoke-test config for the 64x128 LDPC code.
+#
+# Goal: end-to-end workflow validation in a few minutes on a single GPU. Three
+# curriculum phases are kept so phase transitions are exercised, and the memory
+# limits are sized so Phase 3 trips a mid-phase flush (producing a
+# *_training_epoch1_phase3_flush1.json.gz file). The production LDPCOptimizedMLP
+# network and expert seeding are kept so the smoke test covers the same code
+# paths as 64x128_Full.
+#
+# Path note: the main dataset below has its own name, so neither a direct run
+# nor a run through the multi-matrix orchestrator can clobber the seed-42 Full
+# dataset. The orchestrator reads this path from the config rather than imposing
+# a name of its own. The expert .pkl is likewise distinct from Full's 500k file.
+
+experiment_name: "QuickStart_64x128_3ep"
+seed: 42
+device: "cuda"
+
+code_id: "64x128"
+
+# Pipeline
+run_dataset_creation: true
+run_training: true
+run_evaluation: true
+
+# Dataset and expert replay
+dataset_creation:
+  config_path: "config/experiments_config/64x128_QuickStart_3ep/main_dataset_config.json"
+  output_path: "data/ldpc_64x128_quickstart_3ep.h5" # Own file: QuickStart's shared path would
+                                                    # clobber the seed-42 Full dataset.
+  test_size: 0.3
+  force_recreate: true
+
+expert_experience:
+  use_pregenerated_file: true
+  pregenerated_file: "data/quickstart_64x128_omniscient_5000.pkl" # Distinct from Full's 500k pkl.
+
+# Training (production network and hyperparameters kept; horizons shortened)
+training:
+  num_epochs: 3   # Exercises the (epoch, phase) partitioning across three passes
+  replay_buffer_size: 50000        # ~5k expert seed + ~25k training experiences
+  batch_size: 32
+  target_update_freq: 1000
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  update_frequency: 4              # Smoke test only: 1 gradient update per 4 env steps, for speed.
+                                   # All real experiments use 1 (the code default). See README 2.2.
+
+  # Per-phase linear epsilon schedule sized for ~1k/1.75k/3k gradient updates per phase.
+  # See notebooks/epsilon_estimations.ipynb for the derivation.
+  epsilon_decay_type: "linear"
+  epsilon_start:  [1.0,    0.7,    0.5]
+  epsilon_min:    [0.3,    0.15,   0.05]
+  epsilon_decay:  [0.0007, 0.00033, 0.00015]
+  epsilon_phase_reset: true
+
+  network:
+    type: "LDPCOptimizedMLP"
+    dropout_rate: 0.05
+    leaky_slope: 0.01
+    hidden_dim1: 640
+
+# Evaluation (min_sum_expert disabled — dominates eval cost on 2.4k test cases).
+evaluation:
+  baseline_agents:
+    - name: "random"
+      enabled: false
+    - name: "greedy"
+      enabled: true
+    - name: "simple_classical"
+      enabled: false
+    - name: "min_sum"
+      enabled: false
+    - name: "min_sum_expert"
+      enabled: false
+
+# Environment (unchanged from Full so QuickStart validates the same MDP).
+environment:
+  max_steps: 12
+  max_flips_vector: 7
+
+# Model loading
+load_pretrained_model:
+  enabled: false
+  model_path: "models/ldpc_rl_agent.pth"
+  overwrite: false
+
+# Output paths
+output_paths:
+  results_dir: "results/"
+  models_dir: "models/"
+
+# Memory management — sized so Phase 3 (~2.4k train episodes) trips a mid-phase
+# flush, producing a *_training_epoch{E}_phase3_flush1.json.gz alongside the
+# per-segment files. Evaluation (~2.4k episodes per agent) does the same on the
+# eval side.
+memory_management:
+  training:
+    max_episodes_per_phase: 2000
+    auto_flush_frequency: 1001
+    enable_progressive_saving: true
+
+  evaluation:
+    max_episodes_per_agent: 2000
+    auto_flush_frequency: 1001
+    enable_progressive_saving: true

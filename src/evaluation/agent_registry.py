@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Optional, Type
 from pathlib import Path
 
 from src.core.learning_agent import DQNAgent
-from src.core.baseline_agents import RandomAgent, GreedyAgent, SimpleClassicalAgent, MinSumAgent, MinSumExpertAgent
+from src.core.baseline_agents import RandomAgent, GreedyAgent, SimpleClassicalAgent, MinSumAgent, MinSumExpertAgent, GallagerBAgent
 from src.utils.path_utils import resolve_models_path
 
 
@@ -57,7 +57,8 @@ class AgentRegistry:
             'greedy': GreedyAgent,
             'simple_classical': SimpleClassicalAgent,
             'min_sum': MinSumAgent,
-            'min_sum_expert': MinSumExpertAgent
+            'min_sum_expert': MinSumExpertAgent,
+            'gallager_b': GallagerBAgent
         }
     
     def get_agent_specs(self) -> List[AgentSpec]:
@@ -157,6 +158,7 @@ class AgentRegistry:
             action_dim=self.env.action_dim,
             network_config=network_config,
             device=self.config.get('device'),
+            strict_device=self.config.get('strict_device', True),
             **self._get_rl_agent_params(spec.config)
         )
         
@@ -179,10 +181,17 @@ class AgentRegistry:
             raise ValueError("Environment required for baseline agent creation")
         
         agent_class = spec.agent_class
-        
+
+        # Everything in the baseline's config block other than its identity is a
+        # constructor argument. An unknown name raises from the constructor.
+        parameters = {key: value for key, value in (spec.config or {}).items()
+                      if key not in ('name', 'enabled')}
+        if parameters:
+            print(f"   {spec.name} parameters: {parameters}")
+
         # Create agent with LDPC code
         try:
-            agent = agent_class(code=self.env.code)
+            agent = agent_class(code=self.env.code, **parameters)
             return agent
         except Exception as e:
             raise RuntimeError(f"Failed to create {spec.name} agent: {e}") from e
@@ -198,24 +207,30 @@ class AgentRegistry:
         }
     
     def _find_rl_model_path(self) -> Optional[str]:
-        """Find the saved RL model from training."""
-        # Check if there's a specific model path configured
-        pretrained_config = self.config.get('load_pretrained_model', {})
-        if pretrained_config.get('enabled', False):
-            model_path = pretrained_config.get('model_path')
-            if model_path and os.path.exists(model_path):
-                return model_path
-        
-        # Look for models in the models directory
+        """Find the model this evaluation should score."""
         models_dir = Path(self.models_dir)
-        
-        # First priority: Look for model with current experiment timestamp
+
+        # Highest priority: the checkpoint this run produced. It exists only if
+        # this run trained and saved, and in that case it is the model under test.
+        # Preferring a configured pretrained path here, as this once did, meant a
+        # run that loaded a checkpoint and then trained reported the performance of
+        # the weights it started from.
         current_timestamp = self.config.get('current_experiment_timestamp')
         if current_timestamp:
             timestamp_model = models_dir / f'ldpc_rl_agent_{current_timestamp}.pth'
             if timestamp_model.exists():
                 print(f"Found current experiment model: {timestamp_model}")
                 return str(timestamp_model)
+
+        # Next: a configured pretrained model, which is what an evaluation-only run
+        # is asking to score.
+        pretrained_config = self.config.get('load_pretrained_model', {})
+        if pretrained_config.get('enabled', False):
+            model_path = pretrained_config.get('model_path')
+            if model_path and os.path.exists(model_path):
+                print(f"Using configured pretrained model: {model_path}")
+                return model_path
+
         
         # Common model file patterns
         patterns = [
@@ -296,7 +311,8 @@ class AgentRegistry:
             'greedy': 'Greedy Agent',
             'simple_classical': 'Simple Classical Agent',
             'min_sum': 'Min-Sum Agent',
-            'min_sum_expert': 'Min-Sum Expert Agent'
+            'min_sum_expert': 'Min-Sum Expert Agent',
+            'gallager_b': 'Gallager-B Agent'
         }
         return display_names.get(agent_name, agent_name.title() + ' Agent')
     

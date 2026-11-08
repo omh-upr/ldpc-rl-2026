@@ -7,7 +7,7 @@ Unlike the main AgentRegistry, this is designed for simplicity and single-purpos
 
 from typing import Dict, Type, Any, Optional
 from src.core.base_agent import BaseAgent
-from src.core.baseline_agents import RandomAgent, GreedyAgent, MinSumAgent, MinSumExpertAgent, OmniscientAgent
+from src.core.baseline_agents import RandomAgent, GreedyAgent, MinSumAgent, MinSumExpertAgent, GallagerBAgent, OmniscientAgent
 from src.core.ldpc_code import LDPC_Code
 
 
@@ -26,6 +26,7 @@ class SimpleAgentRegistry:
             'greedy': GreedyAgent, 
             'min_sum': MinSumAgent,
             'min_sum_expert': MinSumExpertAgent,
+            'gallager_b': GallagerBAgent,
             'omniscient': OmniscientAgent
         }
     

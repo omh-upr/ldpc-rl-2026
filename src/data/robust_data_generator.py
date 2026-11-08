@@ -5,6 +5,41 @@ import json
 from typing import Dict, List, Tuple, Iterator, Any, Union, Optional
 from src.core.ldpc_code import LDPC_Code
 
+def rescale_phase_samples(config: dict) -> None:
+    """
+    Rescale each phase's num_samples proportionally to config['total_samples'].
+
+    When total_samples is present the per-phase counts in a curriculum file are
+    weights rather than counts, so this is what turns a config on disk into the one
+    a dataset is actually built from. A dataset stores the rescaled form, so anyone
+    comparing a request against a stored config has to apply this first.
+
+    Mutates the config in place.
+    """
+    total_samples = config['total_samples']
+    curriculum = config['curriculum']
+
+    # Treat num_samples as weights and calculate total weight
+    total_weight = sum(phase.get('num_samples', 0) for phase in curriculum)
+    if total_weight == 0:
+        # If all weights are zero, distribute samples evenly
+        num_phases = len(curriculum)
+        if num_phases > 0:
+            samples_per_phase = total_samples // num_phases
+            for phase in curriculum:
+                phase['num_samples'] = samples_per_phase
+    else:
+        # Calculate proportional samples
+        for phase in curriculum:
+            weight = phase.get('num_samples', 0)
+            phase['num_samples'] = int((weight / total_weight) * total_samples)
+
+    # Distribute remainder to ensure total_samples is met exactly
+    remainder = total_samples - sum(p['num_samples'] for p in curriculum)
+    for i in range(remainder):
+        curriculum[i % len(curriculum)]['num_samples'] += 1
+
+
 class RobustDataGenerator:
     """
     Generates, saves, and serves robust LDPC datasets for training and evaluation.
@@ -57,31 +92,7 @@ class RobustDataGenerator:
 
     def _recalculate_phase_samples(self):
         """Recalculates num_samples for each phase based on total_samples."""
-        total_samples = self.config['total_samples']
-        curriculum = self.config['curriculum']
-        
-        # Treat num_samples as weights and calculate total weight
-        total_weight = sum(phase.get('num_samples', 0) for phase in curriculum)
-        if total_weight == 0:
-            # If all weights are zero, distribute samples evenly
-            num_phases = len(curriculum)
-            if num_phases > 0:
-                samples_per_phase = total_samples // num_phases
-                for phase in curriculum:
-                    phase['num_samples'] = samples_per_phase
-        else:
-            # Calculate proportional samples
-            running_total = 0
-            for phase in curriculum:
-                weight = phase.get('num_samples', 0)
-                proportional_samples = int((weight / total_weight) * total_samples)
-                phase['num_samples'] = proportional_samples
-                running_total += proportional_samples
-        
-        # Distribute remainder to ensure total_samples is met exactly
-        remainder = total_samples - sum(p['num_samples'] for p in curriculum)
-        for i in range(remainder):
-            curriculum[i % len(curriculum)]['num_samples'] += 1
+        rescale_phase_samples(self.config)
 
     def _add_cluster_errors(self, num_patterns: int, params: dict) -> np.ndarray:
         """Generates errors clustered around a central point."""
@@ -140,7 +151,15 @@ class RobustDataGenerator:
     def _add_uniform_errors_by_ber(self, num_patterns: int, params: dict) -> np.ndarray:
         """Generates error patterns based on a bit error rate."""
         ber = params['ber']
+        max_errors = params.get('max_errors')
         error_patterns = self.rng.binomial(1, ber, size=(num_patterns, self.n)).astype(np.int8)
+        # Optional cap: redraw any pattern heavier than max_errors, so a BER
+        # model can be kept inside the code's correction radius.
+        if max_errors is not None:
+            heavy = error_patterns.sum(axis=1) > max_errors
+            while heavy.any():
+                error_patterns[heavy] = self.rng.binomial(1, ber, size=(int(heavy.sum()), self.n))
+                heavy = error_patterns.sum(axis=1) > max_errors
         return error_patterns
 
     def _add_burst_errors(self, num_patterns: int, params: dict) -> np.ndarray:

@@ -1,0 +1,1371 @@
+{
+ "generated": "2026-09-25T17:42:04",
+ "condition": "NoC_NoE3ep",
+ "draws": 20,
+ "seeds": {
+  "42": {
+   "min_sum_failures": 111,
+   "agent_failures": 51,
+   "stage2": {
+    "rl": 60,
+    "gallager_b": 49,
+    "greedy": 11
+   },
+   "disagreements_with_record": {
+    "gallager_b": 0,
+    "greedy": 0
+   },
+   "perturb_then_min_sum": {
+    "min_sum_failures": {
+     "agent": {
+      "1": {
+       "recovered": 64,
+       "wrong_codeword": 0,
+       "not_converged": 47
+      },
+      "2": {
+       "recovered": 62,
+       "wrong_codeword": 0,
+       "not_converged": 49
+      },
+      "3": {
+       "recovered": 62,
+       "wrong_codeword": 0,
+       "not_converged": 49
+      },
+      "4": {
+       "recovered": 64,
+       "wrong_codeword": 0,
+       "not_converged": 47
+      },
+      "5": {
+       "recovered": 64,
+       "wrong_codeword": 0,
+       "not_converged": 47
+      },
+      "6": {
+       "recovered": 65,
+       "wrong_codeword": 0,
+       "not_converged": 46
+      }
+     },
+     "greedy": {
+      "1": {
+       "recovered": 19,
+       "wrong_codeword": 0,
+       "not_converged": 92
+      },
+      "2": {
+       "recovered": 18,
+       "wrong_codeword": 0,
+       "not_converged": 93
+      },
+      "3": {
+       "recovered": 20,
+       "wrong_codeword": 0,
+       "not_converged": 91
+      },
+      "4": {
+       "recovered": 17,
+       "wrong_codeword": 0,
+       "not_converged": 94
+      },
+      "5": {
+       "recovered": 17,
+       "wrong_codeword": 0,
+       "not_converged": 94
+      },
+      "6": {
+       "recovered": 18,
+       "wrong_codeword": 0,
+       "not_converged": 93
+      }
+     },
+     "random": {
+      "1": {
+       "recovered": 23.55,
+       "wrong_codeword": 0.0,
+       "not_converged": 87.45
+      },
+      "2": {
+       "recovered": 27.2,
+       "wrong_codeword": 0.0,
+       "not_converged": 83.8
+      },
+      "3": {
+       "recovered": 21.25,
+       "wrong_codeword": 0.0,
+       "not_converged": 89.75
+      },
+      "4": {
+       "recovered": 15.8,
+       "wrong_codeword": 0.0,
+       "not_converged": 95.2
+      },
+      "5": {
+       "recovered": 12.0,
+       "wrong_codeword": 0.0,
+       "not_converged": 99.0
+      },
+      "6": {
+       "recovered": 6.45,
+       "wrong_codeword": 0.0,
+       "not_converged": 104.55
+      }
+     }
+    },
+    "agent_failures": {
+     "agent": {
+      "1": {
+       "recovered": 19,
+       "wrong_codeword": 0,
+       "not_converged": 32
+      },
+      "2": {
+       "recovered": 8,
+       "wrong_codeword": 0,
+       "not_converged": 43
+      },
+      "3": {
+       "recovered": 6,
+       "wrong_codeword": 0,
+       "not_converged": 45
+      },
+      "4": {
+       "recovered": 8,
+       "wrong_codeword": 0,
+       "not_converged": 43
+      },
+      "5": {
+       "recovered": 7,
+       "wrong_codeword": 0,
+       "not_converged": 44
+      },
+      "6": {
+       "recovered": 5,
+       "wrong_codeword": 0,
+       "not_converged": 46
+      }
+     },
+     "greedy": {
+      "1": {
+       "recovered": 9,
+       "wrong_codeword": 0,
+       "not_converged": 42
+      },
+      "2": {
+       "recovered": 10,
+       "wrong_codeword": 0,
+       "not_converged": 41
+      },
+      "3": {
+       "recovered": 11,
+       "wrong_codeword": 0,
+       "not_converged": 40
+      },
+      "4": {
+       "recovered": 8,
+       "wrong_codeword": 0,
+       "not_converged": 43
+      },
+      "5": {
+       "recovered": 8,
+       "wrong_codeword": 0,
+       "not_converged": 43
+      },
+      "6": {
+       "recovered": 8,
+       "wrong_codeword": 0,
+       "not_converged": 43
+      }
+     },
+     "random": {
+      "1": {
+       "recovered": 8.85,
+       "wrong_codeword": 0.0,
+       "not_converged": 42.15
+      },
+      "2": {
+       "recovered": 12.1,
+       "wrong_codeword": 0.0,
+       "not_converged": 38.9
+      },
+      "3": {
+       "recovered": 9.9,
+       "wrong_codeword": 0.0,
+       "not_converged": 41.1
+      },
+      "4": {
+       "recovered": 7.35,
+       "wrong_codeword": 0.0,
+       "not_converged": 43.65
+      },
+      "5": {
+       "recovered": 6.15,
+       "wrong_codeword": 0.0,
+       "not_converged": 44.85
+      },
+      "6": {
+       "recovered": 3.45,
+       "wrong_codeword": 0.0,
+       "not_converged": 47.55
+      }
+     }
+    }
+   },
+   "min_sum_iterations": {
+    "50": {
+     "recovered": 42,
+     "wrong_codeword": 0,
+     "not_converged": 69
+    },
+    "100": {
+     "recovered": 100,
+     "wrong_codeword": 0,
+     "not_converged": 11
+    },
+    "200": {
+     "recovered": 108,
+     "wrong_codeword": 0,
+     "not_converged": 3
+    }
+   }
+  },
+  "43": {
+   "min_sum_failures": 108,
+   "agent_failures": 47,
+   "stage2": {
+    "rl": 61,
+    "gallager_b": 49,
+    "greedy": 12
+   },
+   "disagreements_with_record": {
+    "gallager_b": 0,
+    "greedy": 0
+   },
+   "perturb_then_min_sum": {
+    "min_sum_failures": {
+     "agent": {
+      "1": {
+       "recovered": 68,
+       "wrong_codeword": 0,
+       "not_converged": 40
+      },
+      "2": {
+       "recovered": 65,
+       "wrong_codeword": 0,
+       "not_converged": 43
+      },
+      "3": {
+       "recovered": 62,
+       "wrong_codeword": 0,
+       "not_converged": 46
+      },
+      "4": {
+       "recovered": 65,
+       "wrong_codeword": 0,
+       "not_converged": 43
+      },
+      "5": {
+       "recovered": 66,
+       "wrong_codeword": 0,
+       "not_converged": 42
+      },
+      "6": {
+       "recovered": 66,
+       "wrong_codeword": 0,
+       "not_converged": 42
+      }
+     },
+     "greedy": {
+      "1": {
+       "recovered": 19,
+       "wrong_codeword": 0,
+       "not_converged": 89
+      },
+      "2": {
+       "recovered": 16,
+       "wrong_codeword": 0,
+       "not_converged": 92
+      },
+      "3": {
+       "recovered": 21,
+       "wrong_codeword": 0,
+       "not_converged": 87
+      },
+      "4": {
+       "recovered": 20,
+       "wrong_codeword": 0,
+       "not_converged": 88
+      },
+      "5": {
+       "recovered": 18,
+       "wrong_codeword": 0,
+       "not_converged": 90
+      },
+      "6": {
+       "recovered": 17,
+       "wrong_codeword": 0,
+       "not_converged": 91
+      }
+     },
+     "random": {
+      "1": {
+       "recovered": 26.3,
+       "wrong_codeword": 0.0,
+       "not_converged": 81.7
+      },
+      "2": {
+       "recovered": 26.45,
+       "wrong_codeword": 0.0,
+       "not_converged": 81.55
+      },
+      "3": {
+       "recovered": 21.85,
+       "wrong_codeword": 0.0,
+       "not_converged": 86.15
+      },
+      "4": {
+       "recovered": 15.05,
+       "wrong_codeword": 0.0,
+       "not_converged": 92.95
+      },
+      "5": {
+       "recovered": 10.6,
+       "wrong_codeword": 0.0,
+       "not_converged": 97.4
+      },
+      "6": {
+       "recovered": 6.8,
+       "wrong_codeword": 0.0,
+       "not_converged": 101.2
+      }
+     }
+    },
+    "agent_failures": {
+     "agent": {
+      "1": {
+       "recovered": 10,
+       "wrong_codeword": 0,
+       "not_converged": 37
+      },
+      "2": {
+       "recovered": 8,
+       "wrong_codeword": 0,
+       "not_converged": 39
+      },
+      "3": {
+       "recovered": 4,
+       "wrong_codeword": 0,
+       "not_converged": 43
+      },
+      "4": {
+       "recovered": 6,
+       "wrong_codeword": 0,
+       "not_converged": 41
+      },
+      "5": {
+       "recovered": 5,
+       "wrong_codeword": 0,
+       "not_converged": 42
+      },
+      "6": {
+       "recovered": 5,
+       "wrong_codeword": 0,
+       "not_converged": 42
+      }
+     },
+     "greedy": {
+      "1": {
+       "recovered": 12,
+       "wrong_codeword": 0,
+       "not_converged": 35
+      },
+      "2": {
+       "recovered": 12,
+       "wrong_codeword": 0,
+       "not_converged": 35
+      },
+      "3": {
+       "recovered": 16,
+       "wrong_codeword": 0,
+       "not_converged": 31
+      },
+      "4": {
+       "recovered": 15,
+       "wrong_codeword": 0,
+       "not_converged": 32
+      },
+      "5": {
+       "recovered": 14,
+       "wrong_codeword": 0,
+       "not_converged": 33
+      },
+      "6": {
+       "recovered": 11,
+       "wrong_codeword": 0,
+       "not_converged": 36
+      }
+     },
+     "random": {
+      "1": {
+       "recovered": 9.95,
+       "wrong_codeword": 0.0,
+       "not_converged": 37.05
+      },
+      "2": {
+       "recovered": 10.7,
+       "wrong_codeword": 0.0,
+       "not_converged": 36.3
+      },
+      "3": {
+       "recovered": 10.15,
+       "wrong_codeword": 0.0,
+       "not_converged": 36.85
+      },
+      "4": {
+       "recovered": 7.75,
+       "wrong_codeword": 0.0,
+       "not_converged": 39.25
+      },
+      "5": {
+       "recovered": 4.85,
+       "wrong_codeword": 0.0,
+       "not_converged": 42.15
+      },
+      "6": {
+       "recovered": 3.45,
+       "wrong_codeword": 0.0,
+       "not_converged": 43.55
+      }
+     }
+    }
+   },
+   "min_sum_iterations": {
+    "50": {
+     "recovered": 39,
+     "wrong_codeword": 0,
+     "not_converged": 69
+    },
+    "100": {
+     "recovered": 97,
+     "wrong_codeword": 0,
+     "not_converged": 11
+    },
+    "200": {
+     "recovered": 101,
+     "wrong_codeword": 0,
+     "not_converged": 7
+    }
+   }
+  },
+  "44": {
+   "min_sum_failures": 121,
+   "agent_failures": 64,
+   "stage2": {
+    "rl": 57,
+    "gallager_b": 51,
+    "greedy": 22
+   },
+   "disagreements_with_record": {
+    "gallager_b": 0,
+    "greedy": 0
+   },
+   "perturb_then_min_sum": {
+    "min_sum_failures": {
+     "agent": {
+      "1": {
+       "recovered": 70,
+       "wrong_codeword": 0,
+       "not_converged": 51
+      },
+      "2": {
+       "recovered": 59,
+       "wrong_codeword": 0,
+       "not_converged": 62
+      },
+      "3": {
+       "recovered": 60,
+       "wrong_codeword": 0,
+       "not_converged": 61
+      },
+      "4": {
+       "recovered": 57,
+       "wrong_codeword": 0,
+       "not_converged": 64
+      },
+      "5": {
+       "recovered": 65,
+       "wrong_codeword": 0,
+       "not_converged": 56
+      },
+      "6": {
+       "recovered": 61,
+       "wrong_codeword": 0,
+       "not_converged": 60
+      }
+     },
+     "greedy": {
+      "1": {
+       "recovered": 24,
+       "wrong_codeword": 0,
+       "not_converged": 97
+      },
+      "2": {
+       "recovered": 25,
+       "wrong_codeword": 0,
+       "not_converged": 96
+      },
+      "3": {
+       "recovered": 25,
+       "wrong_codeword": 0,
+       "not_converged": 96
+      },
+      "4": {
+       "recovered": 24,
+       "wrong_codeword": 0,
+       "not_converged": 97
+      },
+      "5": {
+       "recovered": 27,
+       "wrong_codeword": 0,
+       "not_converged": 94
+      },
+      "6": {
+       "recovered": 24,
+       "wrong_codeword": 0,
+       "not_converged": 97
+      }
+     },
+     "random": {
+      "1": {
+       "recovered": 27.8,
+       "wrong_codeword": 0.0,
+       "not_converged": 93.2
+      },
+      "2": {
+       "recovered": 28.4,
+       "wrong_codeword": 0.0,
+       "not_converged": 92.6
+      },
+      "3": {
+       "recovered": 23.55,
+       "wrong_codeword": 0.0,
+       "not_converged": 97.45
+      },
+      "4": {
+       "recovered": 16.45,
+       "wrong_codeword": 0.0,
+       "not_converged": 104.55
+      },
+      "5": {
+       "recovered": 11.15,
+       "wrong_codeword": 0.0,
+       "not_converged": 109.85
+      },
+      "6": {
+       "recovered": 6.5,
+       "wrong_codeword": 0.0,
+       "not_converged": 114.5
+      }
+     }
+    },
+    "agent_failures": {
+     "agent": {
+      "1": {
+       "recovered": 16,
+       "wrong_codeword": 0,
+       "not_converged": 48
+      },
+      "2": {
+       "recovered": 11,
+       "wrong_codeword": 0,
+       "not_converged": 53
+      },
+      "3": {
+       "recovered": 7,
+       "wrong_codeword": 0,
+       "not_converged": 57
+      },
+      "4": {
+       "recovered": 4,
+       "wrong_codeword": 0,
+       "not_converged": 60
+      },
+      "5": {
+       "recovered": 8,
+       "wrong_codeword": 0,
+       "not_converged": 56
+      },
+      "6": {
+       "recovered": 4,
+       "wrong_codeword": 0,
+       "not_converged": 60
+      }
+     },
+     "greedy": {
+      "1": {
+       "recovered": 19,
+       "wrong_codeword": 0,
+       "not_converged": 45
+      },
+      "2": {
+       "recovered": 20,
+       "wrong_codeword": 0,
+       "not_converged": 44
+      },
+      "3": {
+       "recovered": 20,
+       "wrong_codeword": 0,
+       "not_converged": 44
+      },
+      "4": {
+       "recovered": 20,
+       "wrong_codeword": 0,
+       "not_converged": 44
+      },
+      "5": {
+       "recovered": 23,
+       "wrong_codeword": 0,
+       "not_converged": 41
+      },
+      "6": {
+       "recovered": 20,
+       "wrong_codeword": 0,
+       "not_converged": 44
+      }
+     },
+     "random": {
+      "1": {
+       "recovered": 13.9,
+       "wrong_codeword": 0.0,
+       "not_converged": 50.1
+      },
+      "2": {
+       "recovered": 14.25,
+       "wrong_codeword": 0.0,
+       "not_converged": 49.75
+      },
+      "3": {
+       "recovered": 12.45,
+       "wrong_codeword": 0.0,
+       "not_converged": 51.55
+      },
+      "4": {
+       "recovered": 9.6,
+       "wrong_codeword": 0.0,
+       "not_converged": 54.4
+      },
+      "5": {
+       "recovered": 5.8,
+       "wrong_codeword": 0.0,
+       "not_converged": 58.2
+      },
+      "6": {
+       "recovered": 3.35,
+       "wrong_codeword": 0.0,
+       "not_converged": 60.65
+      }
+     }
+    }
+   },
+   "min_sum_iterations": {
+    "50": {
+     "recovered": 42,
+     "wrong_codeword": 0,
+     "not_converged": 79
+    },
+    "100": {
+     "recovered": 101,
+     "wrong_codeword": 0,
+     "not_converged": 20
+    },
+    "200": {
+     "recovered": 109,
+     "wrong_codeword": 0,
+     "not_converged": 12
+    }
+   }
+  },
+  "45": {
+   "min_sum_failures": 119,
+   "agent_failures": 51,
+   "stage2": {
+    "rl": 68,
+    "gallager_b": 56,
+    "greedy": 19
+   },
+   "disagreements_with_record": {
+    "gallager_b": 0,
+    "greedy": 0
+   },
+   "perturb_then_min_sum": {
+    "min_sum_failures": {
+     "agent": {
+      "1": {
+       "recovered": 74,
+       "wrong_codeword": 0,
+       "not_converged": 45
+      },
+      "2": {
+       "recovered": 71,
+       "wrong_codeword": 0,
+       "not_converged": 48
+      },
+      "3": {
+       "recovered": 71,
+       "wrong_codeword": 0,
+       "not_converged": 48
+      },
+      "4": {
+       "recovered": 71,
+       "wrong_codeword": 0,
+       "not_converged": 48
+      },
+      "5": {
+       "recovered": 72,
+       "wrong_codeword": 0,
+       "not_converged": 47
+      },
+      "6": {
+       "recovered": 72,
+       "wrong_codeword": 0,
+       "not_converged": 47
+      }
+     },
+     "greedy": {
+      "1": {
+       "recovered": 31,
+       "wrong_codeword": 0,
+       "not_converged": 88
+      },
+      "2": {
+       "recovered": 27,
+       "wrong_codeword": 0,
+       "not_converged": 92
+      },
+      "3": {
+       "recovered": 27,
+       "wrong_codeword": 0,
+       "not_converged": 92
+      },
+      "4": {
+       "recovered": 24,
+       "wrong_codeword": 0,
+       "not_converged": 95
+      },
+      "5": {
+       "recovered": 25,
+       "wrong_codeword": 0,
+       "not_converged": 94
+      },
+      "6": {
+       "recovered": 26,
+       "wrong_codeword": 0,
+       "not_converged": 93
+      }
+     },
+     "random": {
+      "1": {
+       "recovered": 27.45,
+       "wrong_codeword": 0.0,
+       "not_converged": 91.55
+      },
+      "2": {
+       "recovered": 30.0,
+       "wrong_codeword": 0.0,
+       "not_converged": 89.0
+      },
+      "3": {
+       "recovered": 22.75,
+       "wrong_codeword": 0.0,
+       "not_converged": 96.25
+      },
+      "4": {
+       "recovered": 18.25,
+       "wrong_codeword": 0.0,
+       "not_converged": 100.75
+      },
+      "5": {
+       "recovered": 12.0,
+       "wrong_codeword": 0.0,
+       "not_converged": 107.0
+      },
+      "6": {
+       "recovered": 5.95,
+       "wrong_codeword": 0.05,
+       "not_converged": 113.0
+      }
+     }
+    },
+    "agent_failures": {
+     "agent": {
+      "1": {
+       "recovered": 7,
+       "wrong_codeword": 0,
+       "not_converged": 44
+      },
+      "2": {
+       "recovered": 5,
+       "wrong_codeword": 0,
+       "not_converged": 46
+      },
+      "3": {
+       "recovered": 4,
+       "wrong_codeword": 0,
+       "not_converged": 47
+      },
+      "4": {
+       "recovered": 4,
+       "wrong_codeword": 0,
+       "not_converged": 47
+      },
+      "5": {
+       "recovered": 5,
+       "wrong_codeword": 0,
+       "not_converged": 46
+      },
+      "6": {
+       "recovered": 4,
+       "wrong_codeword": 0,
+       "not_converged": 47
+      }
+     },
+     "greedy": {
+      "1": {
+       "recovered": 18,
+       "wrong_codeword": 0,
+       "not_converged": 33
+      },
+      "2": {
+       "recovered": 17,
+       "wrong_codeword": 0,
+       "not_converged": 34
+      },
+      "3": {
+       "recovered": 17,
+       "wrong_codeword": 0,
+       "not_converged": 34
+      },
+      "4": {
+       "recovered": 16,
+       "wrong_codeword": 0,
+       "not_converged": 35
+      },
+      "5": {
+       "recovered": 18,
+       "wrong_codeword": 0,
+       "not_converged": 33
+      },
+      "6": {
+       "recovered": 18,
+       "wrong_codeword": 0,
+       "not_converged": 33
+      }
+     },
+     "random": {
+      "1": {
+       "recovered": 10.8,
+       "wrong_codeword": 0.0,
+       "not_converged": 40.2
+      },
+      "2": {
+       "recovered": 11.9,
+       "wrong_codeword": 0.0,
+       "not_converged": 39.1
+      },
+      "3": {
+       "recovered": 10.2,
+       "wrong_codeword": 0.0,
+       "not_converged": 40.8
+      },
+      "4": {
+       "recovered": 8.25,
+       "wrong_codeword": 0.0,
+       "not_converged": 42.75
+      },
+      "5": {
+       "recovered": 4.95,
+       "wrong_codeword": 0.0,
+       "not_converged": 46.05
+      },
+      "6": {
+       "recovered": 2.45,
+       "wrong_codeword": 0.0,
+       "not_converged": 48.55
+      }
+     }
+    }
+   },
+   "min_sum_iterations": {
+    "50": {
+     "recovered": 42,
+     "wrong_codeword": 0,
+     "not_converged": 77
+    },
+    "100": {
+     "recovered": 112,
+     "wrong_codeword": 0,
+     "not_converged": 7
+    },
+    "200": {
+     "recovered": 117,
+     "wrong_codeword": 0,
+     "not_converged": 2
+    }
+   }
+  },
+  "46": {
+   "min_sum_failures": 119,
+   "agent_failures": 63,
+   "stage2": {
+    "rl": 56,
+    "gallager_b": 49,
+    "greedy": 12
+   },
+   "disagreements_with_record": {
+    "gallager_b": 0,
+    "greedy": 0
+   },
+   "perturb_then_min_sum": {
+    "min_sum_failures": {
+     "agent": {
+      "1": {
+       "recovered": 62,
+       "wrong_codeword": 0,
+       "not_converged": 57
+      },
+      "2": {
+       "recovered": 64,
+       "wrong_codeword": 0,
+       "not_converged": 55
+      },
+      "3": {
+       "recovered": 62,
+       "wrong_codeword": 0,
+       "not_converged": 57
+      },
+      "4": {
+       "recovered": 59,
+       "wrong_codeword": 0,
+       "not_converged": 60
+      },
+      "5": {
+       "recovered": 60,
+       "wrong_codeword": 0,
+       "not_converged": 59
+      },
+      "6": {
+       "recovered": 61,
+       "wrong_codeword": 0,
+       "not_converged": 58
+      }
+     },
+     "greedy": {
+      "1": {
+       "recovered": 32,
+       "wrong_codeword": 0,
+       "not_converged": 87
+      },
+      "2": {
+       "recovered": 23,
+       "wrong_codeword": 0,
+       "not_converged": 96
+      },
+      "3": {
+       "recovered": 23,
+       "wrong_codeword": 0,
+       "not_converged": 96
+      },
+      "4": {
+       "recovered": 18,
+       "wrong_codeword": 0,
+       "not_converged": 101
+      },
+      "5": {
+       "recovered": 19,
+       "wrong_codeword": 0,
+       "not_converged": 100
+      },
+      "6": {
+       "recovered": 20,
+       "wrong_codeword": 0,
+       "not_converged": 99
+      }
+     },
+     "random": {
+      "1": {
+       "recovered": 27.35,
+       "wrong_codeword": 0.0,
+       "not_converged": 91.65
+      },
+      "2": {
+       "recovered": 28.45,
+       "wrong_codeword": 0.0,
+       "not_converged": 90.55
+      },
+      "3": {
+       "recovered": 22.8,
+       "wrong_codeword": 0.0,
+       "not_converged": 96.2
+      },
+      "4": {
+       "recovered": 16.65,
+       "wrong_codeword": 0.0,
+       "not_converged": 102.35
+      },
+      "5": {
+       "recovered": 12.25,
+       "wrong_codeword": 0.0,
+       "not_converged": 106.75
+      },
+      "6": {
+       "recovered": 5.85,
+       "wrong_codeword": 0.0,
+       "not_converged": 113.15
+      }
+     }
+    },
+    "agent_failures": {
+     "agent": {
+      "1": {
+       "recovered": 12,
+       "wrong_codeword": 0,
+       "not_converged": 51
+      },
+      "2": {
+       "recovered": 9,
+       "wrong_codeword": 0,
+       "not_converged": 54
+      },
+      "3": {
+       "recovered": 7,
+       "wrong_codeword": 0,
+       "not_converged": 56
+      },
+      "4": {
+       "recovered": 3,
+       "wrong_codeword": 0,
+       "not_converged": 60
+      },
+      "5": {
+       "recovered": 4,
+       "wrong_codeword": 0,
+       "not_converged": 59
+      },
+      "6": {
+       "recovered": 5,
+       "wrong_codeword": 0,
+       "not_converged": 58
+      }
+     },
+     "greedy": {
+      "1": {
+       "recovered": 26,
+       "wrong_codeword": 0,
+       "not_converged": 37
+      },
+      "2": {
+       "recovered": 16,
+       "wrong_codeword": 0,
+       "not_converged": 47
+      },
+      "3": {
+       "recovered": 18,
+       "wrong_codeword": 0,
+       "not_converged": 45
+      },
+      "4": {
+       "recovered": 12,
+       "wrong_codeword": 0,
+       "not_converged": 51
+      },
+      "5": {
+       "recovered": 13,
+       "wrong_codeword": 0,
+       "not_converged": 50
+      },
+      "6": {
+       "recovered": 15,
+       "wrong_codeword": 0,
+       "not_converged": 48
+      }
+     },
+     "random": {
+      "1": {
+       "recovered": 14.3,
+       "wrong_codeword": 0.0,
+       "not_converged": 48.7
+      },
+      "2": {
+       "recovered": 14.8,
+       "wrong_codeword": 0.0,
+       "not_converged": 48.2
+      },
+      "3": {
+       "recovered": 12.7,
+       "wrong_codeword": 0.0,
+       "not_converged": 50.3
+      },
+      "4": {
+       "recovered": 9.1,
+       "wrong_codeword": 0.0,
+       "not_converged": 53.9
+      },
+      "5": {
+       "recovered": 6.6,
+       "wrong_codeword": 0.0,
+       "not_converged": 56.4
+      },
+      "6": {
+       "recovered": 3.5,
+       "wrong_codeword": 0.0,
+       "not_converged": 59.5
+      }
+     }
+    }
+   },
+   "min_sum_iterations": {
+    "50": {
+     "recovered": 41,
+     "wrong_codeword": 0,
+     "not_converged": 78
+    },
+    "100": {
+     "recovered": 106,
+     "wrong_codeword": 0,
+     "not_converged": 13
+    },
+    "200": {
+     "recovered": 112,
+     "wrong_codeword": 0,
+     "not_converged": 7
+    }
+   }
+  }
+ },
+ "pooled": {
+  "min_sum_failures": 578,
+  "agent_failures": 276,
+  "stage2": {
+   "rl": 302,
+   "gallager_b": 254,
+   "greedy": 76
+  },
+  "perturb_then_min_sum": {
+   "min_sum_failures": {
+    "agent": {
+     "1": {
+      "recovered": 338,
+      "wrong_codeword": 0,
+      "not_converged": 240
+     },
+     "2": {
+      "recovered": 321,
+      "wrong_codeword": 0,
+      "not_converged": 257
+     },
+     "3": {
+      "recovered": 317,
+      "wrong_codeword": 0,
+      "not_converged": 261
+     },
+     "4": {
+      "recovered": 316,
+      "wrong_codeword": 0,
+      "not_converged": 262
+     },
+     "5": {
+      "recovered": 327,
+      "wrong_codeword": 0,
+      "not_converged": 251
+     },
+     "6": {
+      "recovered": 325,
+      "wrong_codeword": 0,
+      "not_converged": 253
+     }
+    },
+    "greedy": {
+     "1": {
+      "recovered": 125,
+      "wrong_codeword": 0,
+      "not_converged": 453
+     },
+     "2": {
+      "recovered": 109,
+      "wrong_codeword": 0,
+      "not_converged": 469
+     },
+     "3": {
+      "recovered": 116,
+      "wrong_codeword": 0,
+      "not_converged": 462
+     },
+     "4": {
+      "recovered": 103,
+      "wrong_codeword": 0,
+      "not_converged": 475
+     },
+     "5": {
+      "recovered": 106,
+      "wrong_codeword": 0,
+      "not_converged": 472
+     },
+     "6": {
+      "recovered": 105,
+      "wrong_codeword": 0,
+      "not_converged": 473
+     }
+    },
+    "random": {
+     "1": {
+      "recovered": 132.45,
+      "wrong_codeword": 0.0,
+      "not_converged": 445.55
+     },
+     "2": {
+      "recovered": 140.5,
+      "wrong_codeword": 0.0,
+      "not_converged": 437.5
+     },
+     "3": {
+      "recovered": 112.2,
+      "wrong_codeword": 0.0,
+      "not_converged": 465.8
+     },
+     "4": {
+      "recovered": 82.2,
+      "wrong_codeword": 0.0,
+      "not_converged": 495.8
+     },
+     "5": {
+      "recovered": 58.0,
+      "wrong_codeword": 0.0,
+      "not_converged": 520.0
+     },
+     "6": {
+      "recovered": 31.55,
+      "wrong_codeword": 0.05,
+      "not_converged": 546.4
+     }
+    }
+   },
+   "agent_failures": {
+    "agent": {
+     "1": {
+      "recovered": 64,
+      "wrong_codeword": 0,
+      "not_converged": 212
+     },
+     "2": {
+      "recovered": 41,
+      "wrong_codeword": 0,
+      "not_converged": 235
+     },
+     "3": {
+      "recovered": 28,
+      "wrong_codeword": 0,
+      "not_converged": 248
+     },
+     "4": {
+      "recovered": 25,
+      "wrong_codeword": 0,
+      "not_converged": 251
+     },
+     "5": {
+      "recovered": 29,
+      "wrong_codeword": 0,
+      "not_converged": 247
+     },
+     "6": {
+      "recovered": 23,
+      "wrong_codeword": 0,
+      "not_converged": 253
+     }
+    },
+    "greedy": {
+     "1": {
+      "recovered": 84,
+      "wrong_codeword": 0,
+      "not_converged": 192
+     },
+     "2": {
+      "recovered": 75,
+      "wrong_codeword": 0,
+      "not_converged": 201
+     },
+     "3": {
+      "recovered": 82,
+      "wrong_codeword": 0,
+      "not_converged": 194
+     },
+     "4": {
+      "recovered": 71,
+      "wrong_codeword": 0,
+      "not_converged": 205
+     },
+     "5": {
+      "recovered": 76,
+      "wrong_codeword": 0,
+      "not_converged": 200
+     },
+     "6": {
+      "recovered": 72,
+      "wrong_codeword": 0,
+      "not_converged": 204
+     }
+    },
+    "random": {
+     "1": {
+      "recovered": 57.8,
+      "wrong_codeword": 0.0,
+      "not_converged": 218.2
+     },
+     "2": {
+      "recovered": 63.75,
+      "wrong_codeword": 0.0,
+      "not_converged": 212.25
+     },
+     "3": {
+      "recovered": 55.4,
+      "wrong_codeword": 0.0,
+      "not_converged": 220.6
+     },
+     "4": {
+      "recovered": 42.05,
+      "wrong_codeword": 0.0,
+      "not_converged": 233.95
+     },
+     "5": {
+      "recovered": 28.35,
+      "wrong_codeword": 0.0,
+      "not_converged": 247.65
+     },
+     "6": {
+      "recovered": 16.2,
+      "wrong_codeword": 0.0,
+      "not_converged": 259.8
+     }
+    }
+   }
+  },
+  "min_sum_iterations": {
+   "50": {
+    "recovered": 206,
+    "wrong_codeword": 0,
+    "not_converged": 372
+   },
+   "100": {
+    "recovered": 516,
+    "wrong_codeword": 0,
+    "not_converged": 62
+   },
+   "200": {
+    "recovered": 547,
+    "wrong_codeword": 0,
+    "not_converged": 31
+   }
+  }
+ }
+}

@@ -1,0 +1,113 @@
+{
+ "generator": "scripts/extract_example_episode.py",
+ "rule": "first held-out word in evaluation order with an error pattern of weight 6 on which the agent ends in a task success and greedy does not",
+ "cell": "NoC_NoE3ep_s42",
+ "epoch": 3,
+ "sources": [
+  "results/ablation/NoC_NoE3ep_s42/Ablation_64x128_NoC_NoE3ep_s42_20260924_153031_evaluation_agent_rl.json.gz",
+  "results/ablation/NoC_NoE3ep_s42/Ablation_64x128_NoC_NoE3ep_s42_20260924_153031_evaluation_agent_greedy.json.gz"
+ ],
+ "evaluation_index": 7,
+ "error_model": "uniform_count",
+ "weight": 6,
+ "error_positions": [
+  35,
+  54,
+  68,
+  119,
+  123,
+  125
+ ],
+ "stop_action": 128,
+ "agent": {
+  "actions": [
+   35,
+   125,
+   124,
+   119,
+   58,
+   124,
+   58,
+   54,
+   123,
+   68,
+   128
+  ],
+  "syndrome_weight": [
+   14,
+   11,
+   8,
+   7,
+   4,
+   9,
+   10,
+   5,
+   4,
+   3,
+   0,
+   0
+  ],
+  "flip_weight": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   4,
+   3,
+   4,
+   5,
+   6,
+   6
+  ],
+  "terminal_reason": "SUCCESS_STOP"
+ },
+ "greedy": {
+  "actions": [
+   35,
+   21,
+   41,
+   96,
+   4,
+   7,
+   4,
+   7,
+   4,
+   7,
+   4,
+   7
+  ],
+  "syndrome_weight": [
+   14,
+   11,
+   10,
+   9,
+   6,
+   7,
+   8,
+   7,
+   6,
+   7,
+   8,
+   7,
+   6
+  ],
+  "flip_weight": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   5,
+   4,
+   5,
+   6,
+   5,
+   4
+  ],
+  "terminal_reason": "MAX_STEPS"
+ }
+}

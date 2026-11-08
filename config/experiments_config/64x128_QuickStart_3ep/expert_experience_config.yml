@@ -1,0 +1,21 @@
+code_id: '64x128'
+seed: 42  # Seeds all RNGs so the generated experience file is reproducible.
+
+# Shares Full's expert dataset path. The orchestrator reads this path from here
+# and regenerates the file per run from this folder's expert_dataset_config.json,
+# after checking that any existing file matches that config.
+dataset: 'data/ldpc_64x128_expert_dataset.h5'
+
+environment:
+  max_steps: 12
+  max_flips_vector: 7
+
+agent_type: 'omniscient'
+
+# 5k experiences fits comfortably within ~2.5k expert episodes
+# (omniscient averages ~3 steps/episode for 1-3 errors).
+num_experiences: 5000
+
+output_file: 'data/quickstart_64x128_omniscient_5000.pkl'
+
+agent_params: {}

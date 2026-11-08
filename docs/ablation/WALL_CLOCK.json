@@ -1,0 +1,252 @@
+{
+ "generated": "2026-11-07",
+ "note": "Local time. Minutes from the run's start stamp to its newest evaluation file: dataset creation, training and evaluation.",
+ "cells": {
+  "Full3epFloor_s42": {
+   "started": "2026-09-20T00:08:54",
+   "finished": "2026-09-20T02:42:31",
+   "minutes": 153.6228,
+   "suspended": false
+  },
+  "Full3ep_s42": {
+   "started": "2026-09-19T20:37:09",
+   "finished": "2026-09-19T23:11:19",
+   "minutes": 154.1695,
+   "suspended": false
+  },
+  "Full3ep_s43": {
+   "started": "2026-09-20T09:38:27",
+   "finished": "2026-09-20T12:12:46",
+   "minutes": 154.3273,
+   "suspended": false
+  },
+  "Full3ep_s44": {
+   "started": "2026-09-20T14:01:40",
+   "finished": "2026-09-20T16:37:58",
+   "minutes": 156.3009,
+   "suspended": false
+  },
+  "Full3ep_s45": {
+   "started": "2026-09-21T16:39:08",
+   "finished": "2026-09-21T19:15:38",
+   "minutes": 156.5145,
+   "suspended": false
+  },
+  "Full3ep_s46": {
+   "started": "2026-09-21T19:29:19",
+   "finished": "2026-09-21T22:03:51",
+   "minutes": 154.5337,
+   "suspended": false
+  },
+  "Full_s42": {
+   "started": "2026-09-13T18:01:42",
+   "finished": "2026-09-13T19:00:00",
+   "minutes": 58.3024,
+   "suspended": false
+  },
+  "Full_s43": {
+   "started": "2026-09-13T23:24:23",
+   "finished": "2026-09-14T00:22:07",
+   "minutes": 57.7444,
+   "suspended": false
+  },
+  "Full_s44": {
+   "started": "2026-09-14T22:26:43",
+   "finished": "2026-09-14T23:27:36",
+   "minutes": 60.894,
+   "suspended": false
+  },
+  "Full_s45": {
+   "started": "2026-09-15T16:53:09",
+   "finished": "2026-09-15T17:57:29",
+   "minutes": 64.337,
+   "suspended": false
+  },
+  "Full_s46": {
+   "started": "2026-09-15T21:53:05",
+   "finished": "2026-09-15T22:57:18",
+   "minutes": 64.2331,
+   "suspended": false
+  },
+  "NoC_NoE3ep_s42": {
+   "started": "2026-09-24T15:30:31",
+   "finished": "2026-09-24T18:25:36",
+   "minutes": 175.087,
+   "suspended": false
+  },
+  "NoC_NoE3ep_s43": {
+   "started": "2026-09-24T18:30:41",
+   "finished": "2026-09-24T21:25:24",
+   "minutes": 174.7251,
+   "suspended": false
+  },
+  "NoC_NoE3ep_s44": {
+   "started": "2026-09-24T21:28:35",
+   "finished": "2026-09-25T00:22:49",
+   "minutes": 174.2354,
+   "suspended": false
+  },
+  "NoC_NoE3ep_s45": {
+   "started": "2026-09-25T07:59:07",
+   "finished": "2026-09-25T10:55:09",
+   "minutes": 176.0495,
+   "suspended": false
+  },
+  "NoC_NoE3ep_s46": {
+   "started": "2026-09-25T11:07:22",
+   "finished": "2026-09-25T14:08:36",
+   "minutes": 181.2457,
+   "suspended": false
+  },
+  "NoC_NoE_s42": {
+   "started": "2026-09-13T19:45:45",
+   "finished": "2026-09-13T20:58:57",
+   "minutes": 73.2126,
+   "suspended": false
+  },
+  "NoC_NoE_s43": {
+   "started": "2026-09-14T18:06:19",
+   "finished": "2026-09-14T19:22:35",
+   "minutes": 76.2723,
+   "suspended": false
+  },
+  "NoC_NoE_s44": {
+   "started": "2026-09-14T23:31:40",
+   "finished": "2026-09-15T00:46:26",
+   "minutes": 74.782,
+   "suspended": false
+  },
+  "NoC_NoE_s45": {
+   "started": "2026-09-15T17:58:05",
+   "finished": "2026-09-15T19:18:07",
+   "minutes": 80.0343,
+   "suspended": false
+  },
+  "NoC_NoE_s46": {
+   "started": "2026-09-16T17:53:00",
+   "finished": "2026-09-16T21:27:11",
+   "minutes": 214.1959,
+   "suspended": true
+  },
+  "OnlyC3ep_s42": {
+   "started": "2026-09-23T08:36:28",
+   "finished": "2026-09-23T11:30:57",
+   "minutes": 174.4858,
+   "suspended": false
+  },
+  "OnlyC3ep_s43": {
+   "started": "2026-09-23T11:32:14",
+   "finished": "2026-09-23T14:31:42",
+   "minutes": 179.469,
+   "suspended": false
+  },
+  "OnlyC3ep_s44": {
+   "started": "2026-09-23T14:38:43",
+   "finished": "2026-09-23T17:33:24",
+   "minutes": 174.6999,
+   "suspended": false
+  },
+  "OnlyC3ep_s45": {
+   "started": "2026-09-23T17:40:18",
+   "finished": "2026-09-23T20:40:27",
+   "minutes": 180.158,
+   "suspended": false
+  },
+  "OnlyC3ep_s46": {
+   "started": "2026-09-23T20:45:35",
+   "finished": "2026-09-23T23:38:24",
+   "minutes": 172.8204,
+   "suspended": false
+  },
+  "OnlyC_s42": {
+   "started": "2026-09-13T16:47:20",
+   "finished": "2026-09-13T18:01:18",
+   "minutes": 73.9782,
+   "suspended": false
+  },
+  "OnlyC_s43": {
+   "started": "2026-09-13T22:07:41",
+   "finished": "2026-09-13T23:23:59",
+   "minutes": 76.3108,
+   "suspended": false
+  },
+  "OnlyC_s44": {
+   "started": "2026-09-14T21:08:28",
+   "finished": "2026-09-14T22:26:17",
+   "minutes": 77.8257,
+   "suspended": false
+  },
+  "OnlyC_s45": {
+   "started": "2026-09-15T15:33:21",
+   "finished": "2026-09-15T16:52:46",
+   "minutes": 79.4305,
+   "suspended": false
+  },
+  "OnlyC_s46": {
+   "started": "2026-09-15T20:31:30",
+   "finished": "2026-09-15T21:52:41",
+   "minutes": 81.195,
+   "suspended": false
+  },
+  "OnlyE3ep_s42": {
+   "started": "2026-10-02T15:20:06",
+   "finished": "2026-10-02T17:55:50",
+   "minutes": 155.7375,
+   "suspended": false
+  },
+  "OnlyE3ep_s43": {
+   "started": "2026-10-02T17:59:11",
+   "finished": "2026-10-02T20:44:34",
+   "minutes": 165.3889,
+   "suspended": false
+  },
+  "OnlyE3ep_s44": {
+   "started": "2026-10-02T20:48:03",
+   "finished": "2026-10-02T23:45:31",
+   "minutes": 177.4699,
+   "suspended": false
+  },
+  "OnlyE3ep_s45": {
+   "started": "2026-10-02T23:49:17",
+   "finished": "2026-10-03T02:42:16",
+   "minutes": 172.9955,
+   "suspended": false
+  },
+  "OnlyE3ep_s46": {
+   "started": "2026-10-03T02:45:28",
+   "finished": "2026-10-03T05:24:20",
+   "minutes": 158.8692,
+   "suspended": false
+  },
+  "OnlyE_s42": {
+   "started": "2026-09-13T20:59:21",
+   "finished": "2026-09-13T22:01:02",
+   "minutes": 61.6844,
+   "suspended": false
+  },
+  "OnlyE_s43": {
+   "started": "2026-09-14T19:23:04",
+   "finished": "2026-09-14T20:22:28",
+   "minutes": 59.4012,
+   "suspended": false
+  },
+  "OnlyE_s44": {
+   "started": "2026-09-15T00:46:49",
+   "finished": "2026-09-15T01:42:18",
+   "minutes": 55.4942,
+   "suspended": false
+  },
+  "OnlyE_s45": {
+   "started": "2026-09-15T19:18:30",
+   "finished": "2026-09-15T20:23:46",
+   "minutes": 65.2758,
+   "suspended": false
+  },
+  "OnlyE_s46": {
+   "started": "2026-09-16T21:27:37",
+   "finished": "2026-09-16T22:27:49",
+   "minutes": 60.2114,
+   "suspended": false
+  }
+ }
+}

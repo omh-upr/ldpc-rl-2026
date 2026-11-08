@@ -139,7 +139,10 @@ class ExperienceGenerator:
                 episode_count += 1
 
                 while not done:
-                    action = self.agent.select_action(state)
+                    # The environment may restrict the action set; every agent
+                    # is offered the same list, as in training and evaluation.
+                    action = self.agent.select_action(
+                        state, legal_actions=self.env.get_legal_actions())
                     next_state, reward, done, _ = self.env.step(action)
 
                     self.replay_buffer.push(state, action, reward, next_state, float(done))
@@ -192,7 +195,10 @@ class ExperienceGenerator:
                 episode_experiences = 0
                 
                 while not done:
-                    action = self.agent.select_action(state)
+                    # The environment may restrict the action set; every agent
+                    # is offered the same list, as in training and evaluation.
+                    action = self.agent.select_action(
+                        state, legal_actions=self.env.get_legal_actions())
                     next_state, reward, done, _ = self.env.step(action)
                     
                     self.replay_buffer.push(state, action, reward, next_state, float(done))

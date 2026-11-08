@@ -25,38 +25,44 @@ def gf2_rank(matrix: np.ndarray) -> int:
     """
     Compute the rank of a binary matrix over GF(2).
 
+    Every column is a candidate pivot, so all n of them are scanned. Stopping at
+    column m - 1 would undercount any wide matrix whose independent pivots do not
+    all fall in the leading square block: [[0, 1]] has rank 1, but a scan that sees
+    only its zero first column reports 0.
+
     Args:
         matrix: Binary matrix (values 0 or 1)
 
     Returns:
         Rank of the matrix over GF(2)
     """
-    matrix = matrix.astype(np.uint8) % 2
-    m, n = matrix.shape
+    work_matrix = (matrix.astype(np.uint8) % 2).copy()
+    m, n = work_matrix.shape
     rank = 0
 
-    # Create working copy
-    work_matrix = matrix.copy()
+    for col in range(n):
+        # Rank cannot exceed the number of rows, so once every row carries a pivot
+        # the remaining columns can add nothing.
+        if rank == m:
+            break
 
-    for col in range(min(m, n)):
-        # Find pivot row
-        pivot_row = None
-        for row in range(rank, m):
-            if work_matrix[row, col] == 1:
-                pivot_row = row
-                break
-
-        if pivot_row is None:
+        # Find pivot row at or below the current rank
+        candidates = np.nonzero(work_matrix[rank:, col])[0]
+        if candidates.size == 0:
             continue  # No pivot in this column
+
+        pivot_row = rank + int(candidates[0])
 
         # Swap rows if needed
         if pivot_row != rank:
             work_matrix[[rank, pivot_row]] = work_matrix[[pivot_row, rank]]
 
-        # Eliminate other rows
-        for row in range(m):
-            if row != rank and work_matrix[row, col] == 1:
-                work_matrix[row] = (work_matrix[row] + work_matrix[rank]) % 2
+        # Eliminate this column from every other row. Entries are 0 or 1, so XOR is
+        # addition modulo 2, applied to all affected rows at once.
+        affected = np.nonzero(work_matrix[:, col])[0]
+        affected = affected[affected != rank]
+        if affected.size:
+            work_matrix[affected] ^= work_matrix[rank]
 
         rank += 1
 

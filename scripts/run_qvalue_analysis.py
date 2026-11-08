@@ -205,7 +205,6 @@ def load_agent(checkpoint_path: str,
         state_dim=state_dim,
         action_dim=action_dim,
         network_config=network_config,
-        environment=None,  # Not needed for inference
         device=device
     )
 
@@ -306,6 +305,19 @@ def run_analysis(config_path: str,
     Returns:
         Dictionary with aggregated results per error count
     """
+    if samples_per_k < 1:
+        raise ValueError(f"samples_per_k must be at least 1, got {samples_per_k}")
+    if min_errors < 1 or max_errors < min_errors:
+        raise ValueError(
+            f"error range must satisfy 1 <= min_errors <= max_errors, got "
+            f"min_errors={min_errors}, max_errors={max_errors}")
+    if top_k is not None and top_k < 1:
+        raise ValueError(f"top_k must be at least 1 when given, got {top_k}")
+
+    # Report progress ten times per error count, but never divide by zero on a run
+    # of fewer than ten samples.
+    progress_interval = max(1, samples_per_k // 10)
+
     # Load config
     with open(config_path) as f:
         config = yaml.safe_load(f)
@@ -320,7 +332,7 @@ def run_analysis(config_path: str,
     code = LDPC_Code.from_default(code_id)
     env = LDPCEnvironment(
         code=code,
-        max_steps=config.get('training', {}).get('max_steps', 10),
+        max_steps=config.get('environment', {}).get('max_steps', 10),
         max_flips_vector=max_errors
     )
 
@@ -371,7 +383,7 @@ def run_analysis(config_path: str,
             results[num_err].append(metrics)
 
             # Progress indicator
-            if verbose and (i + 1) % (samples_per_k // 10) == 0:
+            if verbose and (i + 1) % progress_interval == 0:
                 print('.', end='', flush=True)
 
         if verbose:

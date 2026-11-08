@@ -142,8 +142,9 @@ class LDPCAnalysis:
         for seq in sequences:
             self.con.execute(f"DROP SEQUENCE IF EXISTS {seq}")
         
-        # Create sequences for auto-increment behavior
-        self.con.execute("CREATE SEQUENCE episodes_seq START 1")
+        # Only steps needs a sequence: step_id defaults to nextval('steps_seq').
+        # Episode ids are assigned explicitly from the highest already stored, so
+        # episodes_seq is only dropped above, never recreated.
         self.con.execute("CREATE SEQUENCE steps_seq START 1")
         
         # Create experiments table
@@ -164,6 +165,7 @@ class LDPCAnalysis:
                 episode_type VARCHAR,
                 original_episode_id INTEGER,
                 agent_type VARCHAR,
+                epoch INTEGER,
                 phase INTEGER,
                 original_codeword INTEGER[],
                 noisy_codeword INTEGER[],
@@ -216,18 +218,25 @@ class LDPCAnalysis:
         print("Database schema created successfully (indexes will be created after data loading)")
     
     def _create_indexes(self):
-        """Create indexes for common query patterns."""
+        """Create indexes for common query patterns.
+
+        Index names are global to the database, and a database may hold more than
+        one experiment, so this has to be safe to call again. Without IF NOT EXISTS
+        a second load_experiment_data() raised after its rows were already
+        committed, leaving the caller with a failure and the database with data.
+        """
         indexes = [
-            "CREATE INDEX idx_episodes_agent_type ON episodes(agent_type)",
-            "CREATE INDEX idx_episodes_phase ON episodes(phase)", 
-            "CREATE INDEX idx_episodes_success ON episodes(success)",
-            "CREATE INDEX idx_episodes_type ON episodes(episode_type)",
-            "CREATE INDEX idx_steps_global_episode_id ON steps(global_episode_id)",
-            "CREATE INDEX idx_episodes_agent_success ON episodes(agent_type, success)",
-            "CREATE INDEX idx_episodes_phase_agent ON episodes(phase, agent_type)",
-            "CREATE INDEX idx_episodes_type_agent ON episodes(episode_type, agent_type)",
-            "CREATE INDEX idx_steps_training_loss ON steps(training_loss)",
-            "CREATE INDEX idx_steps_syndrome_weight ON steps(syndrome_weight)"
+            "CREATE INDEX IF NOT EXISTS idx_episodes_agent_type ON episodes(agent_type)",
+            "CREATE INDEX IF NOT EXISTS idx_episodes_phase ON episodes(phase)",
+            "CREATE INDEX IF NOT EXISTS idx_episodes_epoch_phase ON episodes(epoch, phase)", 
+            "CREATE INDEX IF NOT EXISTS idx_episodes_success ON episodes(success)",
+            "CREATE INDEX IF NOT EXISTS idx_episodes_type ON episodes(episode_type)",
+            "CREATE INDEX IF NOT EXISTS idx_steps_global_episode_id ON steps(global_episode_id)",
+            "CREATE INDEX IF NOT EXISTS idx_episodes_agent_success ON episodes(agent_type, success)",
+            "CREATE INDEX IF NOT EXISTS idx_episodes_phase_agent ON episodes(phase, agent_type)",
+            "CREATE INDEX IF NOT EXISTS idx_episodes_type_agent ON episodes(episode_type, agent_type)",
+            "CREATE INDEX IF NOT EXISTS idx_steps_training_loss ON steps(training_loss)",
+            "CREATE INDEX IF NOT EXISTS idx_steps_syndrome_weight ON steps(syndrome_weight)"
         ]
         
         for index_sql in indexes:
@@ -303,52 +312,76 @@ class LDPCAnalysis:
         if len(all_training_episodes) == 0:
             print("   Warning: No training episodes found - this is unusual for most experiments")
         
-        # Insert experiment metadata using latest configuration
-        self._insert_experiment_metadata(
-            experiment_id, 
-            experiment_name or experiment_id,
-            latest_config or {}
-        )
+        # One transaction for every write. DuckDB commits each statement on its
+        # own, so the episodes used to land before the step rows were built, and
+        # an interruption in between left a database holding episodes and no
+        # steps. The next call saw the experiment present and reused it, and the
+        # analyses answered from the episodes alone: the bit error rate summary
+        # reconstructs corrective flips from step rows, so with none stored it
+        # reported that the decoder had fixed nothing, at exit code 0.
+        #
+        # BaseException rather than Exception, because Ctrl-C during a long
+        # import is the way this actually happens.
+        self.con.execute("BEGIN TRANSACTION")
+        try:
+            # Insert experiment metadata using latest configuration
+            self._insert_experiment_metadata(
+                experiment_id, 
+                experiment_name or experiment_id,
+                latest_config or {}
+            )
         
-        # Combine all episodes for unified processing
-        all_episodes = all_training_episodes + evaluation_episodes
+            # Training files may be read in any order, so restore run order from the
+            # run-global episode_id each episode carries.
+            all_training_episodes.sort(key=lambda e: int(e.get('episode_id', 0)))
+
+            # Combine all episodes for unified processing
+            all_episodes = all_training_episodes + evaluation_episodes
         
-        # Use a temporary directory for intermediate CSV files
-        with tempfile.TemporaryDirectory() as temp_dir:
-            episodes_csv_path = Path(temp_dir) / "episodes.csv"
-            steps_csv_path = Path(temp_dir) / "steps.csv"
+            # Use a temporary directory for intermediate CSV files
+            with tempfile.TemporaryDirectory() as temp_dir:
+                episodes_csv_path = Path(temp_dir) / "episodes.csv"
+                steps_csv_path = Path(temp_dir) / "steps.csv"
             
-            # 1. Transform and write all episode data to CSV
-            all_global_ids = self._write_episodes_to_csv(all_episodes, experiment_id, episodes_csv_path)
+                # 1. Transform and write all episode data to CSV
+                all_global_ids = self._write_episodes_to_csv(all_episodes, experiment_id, episodes_csv_path)
             
-            # 2. Bulk load episodes from CSV using DuckDB's fast COPY command
-            print(f"Bulk loading episodes from {episodes_csv_path}...")
-            episodes_columns = "(global_episode_id, experiment_id, episode_type, original_episode_id, agent_type, phase, original_codeword, noisy_codeword, error_pattern, error_model, num_errors, error_parameters, terminal_reason, episode_length, success)"
-            self.con.execute(f"COPY episodes {episodes_columns} FROM '{episodes_csv_path}' (FORMAT CSV, HEADER TRUE, AUTO_DETECT FALSE, QUOTE '\"', ESCAPE '\"')")
-            print("Episodes bulk load complete.")
+                # 2. Bulk load episodes from CSV using DuckDB's fast COPY command
+                print(f"Bulk loading episodes from {episodes_csv_path}...")
+                episodes_columns = "(global_episode_id, experiment_id, episode_type, original_episode_id, agent_type, epoch, phase, original_codeword, noisy_codeword, error_pattern, error_model, num_errors, error_parameters, terminal_reason, episode_length, success)"
+                self.con.execute(f"COPY episodes {episodes_columns} FROM '{episodes_csv_path}' (FORMAT CSV, HEADER TRUE, AUTO_DETECT FALSE, QUOTE '\"', ESCAPE '\"')")
+                print("Episodes bulk load complete.")
 
-            # Verify episode count after bulk load
-            actual_stats = self.con.execute(
-                "SELECT MIN(global_episode_id), MAX(global_episode_id), COUNT(*) FROM episodes WHERE experiment_id = ?",
-                [experiment_id]
-            ).fetchone()
+                # Verify episode count after bulk load
+                actual_stats = self.con.execute(
+                    "SELECT MIN(global_episode_id), MAX(global_episode_id), COUNT(*) FROM episodes WHERE experiment_id = ?",
+                    [experiment_id]
+                ).fetchone()
 
-            if actual_stats[2] != len(all_global_ids):
-                print(f"WARNING: Database episode count ({actual_stats[2]}) != predicted count ({len(all_global_ids)})")
+                if actual_stats[2] != len(all_global_ids):
+                    print(f"WARNING: Database episode count ({actual_stats[2]}) != predicted count ({len(all_global_ids)})")
 
-            # 3. Transform and write all step data to CSV
-            self._write_steps_to_csv(all_episodes, all_global_ids, steps_csv_path)
+                # 3. Transform and write all step data to CSV
+                self._write_steps_to_csv(all_episodes, all_global_ids, steps_csv_path)
             
-            # 4. Bulk load steps from CSV using DuckDB's fast COPY command
-            print(f"Bulk loading steps from {steps_csv_path}...")
-            steps_columns = "(global_episode_id, step_number, action, reward, done, success, codeword_weight, syndrome_weight, flip_weight, penalty_sum, step_count, next_codeword_weight, next_syndrome_weight, next_flip_weight, next_penalty_sum, next_step_count, training_loss, training_epsilon, q_values_mean, q_values_std, q_values_min, q_values_max, target_q_values_mean, target_q_values_std, target_q_values_min, target_q_values_max)"
-            self.con.execute(f"COPY steps {steps_columns} FROM '{steps_csv_path}' (FORMAT CSV, HEADER TRUE)")
-            print("Steps bulk load complete.")
+                # 4. Bulk load steps from CSV using DuckDB's fast COPY command
+                print(f"Bulk loading steps from {steps_csv_path}...")
+                steps_columns = "(global_episode_id, step_number, action, reward, done, success, codeword_weight, syndrome_weight, flip_weight, penalty_sum, step_count, next_codeword_weight, next_syndrome_weight, next_flip_weight, next_penalty_sum, next_step_count, training_loss, training_epsilon, q_values_mean, q_values_std, q_values_min, q_values_max, target_q_values_mean, target_q_values_std, target_q_values_min, target_q_values_max)"
+                self.con.execute(f"COPY steps {steps_columns} FROM '{steps_csv_path}' (FORMAT CSV, HEADER TRUE)")
+                print("Steps bulk load complete.")
 
-        # Create indexes after all data is loaded for optimal performance
-        print("Creating indexes on loaded data...")
-        self._create_indexes()
-        print("Indexes created successfully.")
+            # Create indexes after all data is loaded for optimal performance
+            print("Creating indexes on loaded data...")
+            self._create_indexes()
+            print("Indexes created successfully.")
+
+            self.con.execute("COMMIT")
+        except BaseException:
+            try:
+                self.con.execute("ROLLBACK")
+            except Exception:
+                pass    # a connection too broken to roll back has nothing to commit
+            raise
 
         print(f"Successfully loaded experiment {experiment_id} into database")
 
@@ -407,20 +440,24 @@ class LDPCAnalysis:
         """
         header = [
             "global_episode_id",  # NEW: Explicit ID column as FIRST column
-            "experiment_id", "episode_type", "original_episode_id", "agent_type", "phase",
+            "experiment_id", "episode_type", "original_episode_id", "agent_type", "epoch", "phase",
             "original_codeword", "noisy_codeword", "error_pattern", "error_model",
             "num_errors", "error_parameters", "terminal_reason", "episode_length", "success"
         ]
 
-        # Generate explicit global_episode_ids BEFORE writing CSV
-        try:
-            current_seq = self.con.execute("SELECT currval('episodes_seq')").fetchone()[0]
-        except Exception:
-            # Sequence not yet used - start from 0
-            current_seq = 0
+        # Generate explicit global_episode_ids BEFORE writing CSV.
+        #
+        # Read the highest id from the table rather than from a sequence. A
+        # sequence's currval is scoped to the session, so on a reopened database
+        # it raises and ids restart at 1, which collides with the primary key for
+        # any caller that loads twice without recreating the schema. It also
+        # raises on a sequence never used, and a raised SQL error aborts an
+        # enclosing transaction even when Python catches it, which would make the
+        # whole import unwrappable.
+        highest = self.con.execute(
+            "SELECT COALESCE(MAX(global_episode_id), 0) FROM episodes").fetchone()[0]
 
-        # Generate explicit IDs for all episodes
-        start_id = current_seq + 1
+        start_id = highest + 1
         all_global_ids = list(range(start_id, start_id + len(all_episodes)))
 
         total_episodes = 0
@@ -437,6 +474,7 @@ class LDPCAnalysis:
                     episode.get('episode_type', 'unknown'),
                     episode.get('episode_id', 0),
                     episode.get('agent_type'),
+                    episode.get('epoch'),
                     episode.get('phase'),
                     self._format_array_for_csv(episode.get('original_codeword')),
                     self._format_array_for_csv(episode.get('noisy_codeword')),
@@ -453,14 +491,7 @@ class LDPCAnalysis:
         
         print(f"Wrote {total_episodes:,} episodes to temporary CSV file.")
 
-        # Advance the sequence to account for IDs we just assigned
-        # DuckDB doesn't have setval(), so we drop and recreate the sequence
-        final_seq_value = start_id + len(all_episodes) - 1
-        self.con.execute("DROP SEQUENCE IF EXISTS episodes_seq")
-        self.con.execute(f"CREATE SEQUENCE episodes_seq START {final_seq_value}")
-        # Call nextval() once to initialize currval to final_seq_value
-        self.con.execute("SELECT nextval('episodes_seq')").fetchone()
-
+        # No sequence to advance: the next call reads the ids back off the table.
         return all_global_ids
 
     def _write_steps_to_csv(self, all_episodes: List[Dict], all_global_ids: List[int], csv_path: Path):
@@ -638,6 +669,36 @@ class LDPCAnalysis:
     
     
     
+    def _require_single_experiment(self, analysis_id: str):
+        """
+        Refuse a built-in analysis on a database holding more than one experiment.
+
+        None of the built-in queries mentions experiment_id: they aggregate over
+        whatever the database contains. On a shared database that silently averages
+        runs together, mixes run-local episode numbering in the training curves, and
+        lets the RL/Min-Sum contingency join pair episodes from different runs into
+        disagreements that never happened. The CLI writes one database per
+        experiment, so this only arises when a database is deliberately shared.
+
+        Explicit SQL through `self.con` is unaffected.
+        """
+        try:
+            experiments = [row[0] for row in self.con.execute(
+                "SELECT DISTINCT experiment_id FROM episodes ORDER BY 1").fetchall()]
+        except Exception:
+            # No episodes table yet; loading will report that more usefully.
+            return
+
+        if len(experiments) > 1:
+            raise ValueError(
+                f"'{analysis_id}' aggregates over the whole database, which holds "
+                f"{len(experiments)} experiments ({', '.join(map(str, experiments))}). "
+                f"Its result would combine them: averages across runs, interleaved "
+                f"training curves, and paired comparisons matching episodes from "
+                f"different runs. Use one database per experiment, which is what "
+                f"run_analysis.py does by default, or query self.con directly with "
+                f"an explicit experiment_id filter.")
+
     def run_analysis(self, analysis_id: str, params: dict = None, data_only: bool = False):
         """
         Run a specific analysis by ID using the normalized database.
@@ -650,6 +711,8 @@ class LDPCAnalysis:
         analysis = next((item for item in self.definitions if item["id"] == analysis_id), None)
         if not analysis:
             raise ValueError(f"Analysis with ID '{analysis_id}' not found.")
+
+        self._require_single_experiment(analysis_id)
 
         print(f"Running analysis: {analysis['title']}")
 

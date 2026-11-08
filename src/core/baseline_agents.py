@@ -7,6 +7,7 @@ All baseline agents inherit from the unified BaseAgent interface.
 
 import numpy as np
 from typing import Optional, List
+from src.advanced.gallager_b import GallagerBDecoder
 from src.advanced.min_sum_core import MinSumDecoder
 from src.core.ldpc_code import LDPC_Code
 from src.core.base_agent import BaseAgent
@@ -541,6 +542,76 @@ class MinSumExpertAgent(BaseAgent):
             Copy of the current action list
         """
         return self._action_list.copy()
+
+
+class GallagerBAgent(BaseAgent):
+    """
+    Gallager's hard-decision algorithm B, scored through the environment.
+
+    Decodes the received word once with ``GallagerBDecoder`` (see
+    ``src/advanced/gallager_b.py`` for the algorithm, the majority threshold and the
+    decision rule) and plans the episode from the result, exactly as
+    ``MinSumExpertAgent`` does: when the decision has a zero syndrome, flip every bit
+    where it differs from the received word, in ascending index order, then STOP;
+    when it does not converge, STOP at once. Flips are of distinct bits, so the
+    re-flip restriction never binds, and the environment's step and flip budgets
+    apply as to every other decoder.
+
+    ``last_iterations`` holds the iterations the native decoder ran on the latest
+    episode, for cost accounting. Agent is expected to be reset between episodes by
+    the caller.
+    """
+
+    def __init__(self,
+                 code: Optional[LDPC_Code] = None,
+                 max_iterations: int = 20,
+                 thresholds: Optional[dict] = None):
+        """
+        Args:
+            code: LDPC code instance for dynamic dimensions
+            max_iterations: Iteration limit of the native decoder
+            thresholds: Optional {variable degree: b}; the default is the majority
+                threshold ceil(degree / 2)
+        """
+        self.code = code or LDPC_Code.from_default()
+        self.num_bits = self.code.n
+        self._action_dim = self.code.action_dim
+        self.decoder = GallagerBDecoder(self.code.H, max_iterations=max_iterations,
+                                        thresholds=thresholds)
+        self._action_list = []
+        self._episode_planned = False
+        self.last_iterations = 0
+        self.last_converged = False
+
+    @property
+    def action_dim(self) -> int:
+        """The dimensionality of the action space."""
+        return self._action_dim
+
+    def select_action(self, state: np.ndarray, training: bool = False, **kwargs) -> int:
+        """Plan on the first call of an episode, then pop the planned actions."""
+        if not self._episode_planned:
+            self._plan_episode_actions(state)
+            self._episode_planned = True
+        if self._action_list:
+            return self._action_list.pop(0)
+        return self.num_bits
+
+    def _plan_episode_actions(self, state: np.ndarray):
+        ranges = self.code.state_component_ranges
+        codeword = state[ranges['codeword'][0]:ranges['codeword'][1]].astype(np.int64)
+        decision, converged, iterations = self.decoder.decode(codeword)
+        self.last_iterations = iterations
+        self.last_converged = converged
+        self._action_list = []
+        if converged:
+            self._action_list = np.flatnonzero(decision != codeword).tolist()
+        self._action_list.append(self.num_bits)
+
+    def reset(self):
+        """Reset the agent for a new episode."""
+        self._action_list = []
+        self._episode_planned = False
 
 
 class OmniscientAgent(BaseAgent):

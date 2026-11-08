@@ -15,10 +15,11 @@ from src.core.environment import LDPCEnvironment
 from src.core.learning_agent import DQNAgent
 from src.training.replay_buffer import ReplayBuffer
 from src.training.training import LDPCTrainer
+from src.training import epsilon_schedule
 from src.evaluation.evaluation import LDPCEvaluator
 from src.data.robust_data_generator import RobustDataGenerator
 from src.evaluation.metrics_manager import MetricsManager
-from src.data.create_dataset import create_ldpc_dataset
+from src.data.create_dataset import create_ldpc_dataset, validate_existing_dataset
 from src.evaluation.episode_runner import EpisodeRunner
 from src.evaluation.metrics_callbacks import (
     EpisodeDataCollector
@@ -110,11 +111,24 @@ class LDPCExperiment(ExperimentBase):
         config_path = resolve_project_path(cfg['config_path'])
         output_path = resolve_project_path(cfg['output_path'])
         
-        if output_path.exists() and not cfg.get('force_recreate', False):
-            print(f"Dataset already exists at {output_path}. Skipping creation.")
-            return
-
         code_id = self.config.get('code_id', '56x80')  # Get code_id from config
+
+        if output_path.exists() and not cfg.get('force_recreate', False):
+            # Reuse is only safe if the file is the dataset this config describes.
+            # Skipping on existence alone trains on whatever happens to be there.
+            matches, reason = validate_existing_dataset(
+                output_path, config_path, test_size=cfg['test_size'],
+                code=LDPC_Code.from_default(code_id=code_id))
+            if matches:
+                print(f"Dataset already exists at {output_path} and matches this "
+                      f"config ({reason}). Skipping creation.")
+                return
+            raise RuntimeError(
+                f"Dataset at {output_path} does not match this experiment: {reason}. "
+                f"Remove it, set dataset_creation.force_recreate to true, or point "
+                f"output_path elsewhere. Training on it would use data this "
+                f"configuration did not ask for.")
+
         success = create_ldpc_dataset(
             config_path=str(config_path),
             output_path=str(output_path),
@@ -142,39 +156,37 @@ class LDPCExperiment(ExperimentBase):
             'action_dim': self.env.action_dim,
             'learning_rate': agent_cfg['learning_rate'],
             'weight_decay': agent_cfg.get('weight_decay', 0.0),
-            'epsilon_decay': agent_cfg['epsilon_decay'],
+            'gamma': agent_cfg.get('gamma', 0.99),
+            # An "auto_episodes" schedule cannot be built yet: it needs the
+            # curriculum phase sizes, and the data generator is only loaded
+            # further down. The placeholder is never used, because LDPCTrainer
+            # overwrites the agent's decay with the first phase's value before
+            # episode one.
+            'epsilon_decay': (0.0 if isinstance(agent_cfg['epsilon_decay'], str)
+                              else epsilon_schedule.first_value(
+                                  agent_cfg['epsilon_decay'], 0.999)),
             'network_config': network_config,
             'device': self.config.get('device'),
             # Fail fast when an explicitly requested CUDA device is unavailable,
             # rather than silently completing a full run on CPU.
-            'strict_device': self.config.get('strict_device', True)
+            'strict_device': self.config.get('strict_device', True),
+            # The environment owns this setting; the agent is told so its
+            # bootstrap target excludes the action the environment will refuse.
+            'forbid_immediate_reflip': self.config['environment'].get(
+                'forbid_immediate_reflip', False)
         }
         
-        # Add epsilon_start and epsilon_min if configured
-        if 'epsilon_start' in agent_cfg:
-            # Use first value if it's a list, otherwise use the single value
-            epsilon_start = agent_cfg['epsilon_start']
-            if isinstance(epsilon_start, (list, tuple)):
-                agent_params['epsilon_start'] = epsilon_start[0] if epsilon_start else 1.0
-            else:
-                agent_params['epsilon_start'] = epsilon_start
-        
-        if 'epsilon_min' in agent_cfg:
-            # Use first value if it's a list, otherwise use the single value
-            epsilon_min = agent_cfg['epsilon_min']
-            if isinstance(epsilon_min, (list, tuple)):
-                agent_params['epsilon_min'] = epsilon_min[0] if epsilon_min else 0.05
-            else:
-                agent_params['epsilon_min'] = epsilon_min
-        
-        # Add epsilon_decay_type if configured
-        if 'epsilon_decay_type' in agent_cfg:
-            # Use first value if it's a list, otherwise use the single value
-            epsilon_decay_type = agent_cfg['epsilon_decay_type']
-            if isinstance(epsilon_decay_type, (list, tuple)):
-                agent_params['epsilon_decay_type'] = epsilon_decay_type[0] if epsilon_decay_type else 'exponential'
-            else:
-                agent_params['epsilon_decay_type'] = epsilon_decay_type
+        # Seed the agent with the value the run opens on. Each of these fields
+        # may be a scalar, one value per phase, or one such row per epoch, and
+        # the opening value is epoch one's phase one at any of those depths. The
+        # trainer replaces all of them as soon as it installs the epoch's
+        # schedule, so this only has to be right for the first episode.
+        for field, fallback in (('epsilon_start', 1.0),
+                                ('epsilon_min', 0.05),
+                                ('epsilon_decay_type', 'exponential')):
+            if field in agent_cfg:
+                agent_params[field] = epsilon_schedule.first_value(
+                    agent_cfg[field], fallback)
         
         self.agent = DQNAgent(**agent_params)
         
@@ -267,6 +279,53 @@ class LDPCExperiment(ExperimentBase):
             raise RuntimeError(f"Failed to load pre-trained model: {e}")
 
 
+    def _build_episode_epsilon_schedule(self, cfg):
+        """
+        Build the episode-progress epsilon schedule, when the config asks for it.
+
+        It keys on episodes completed within a phase, which is known exactly,
+        so no expected episode length is needed. The per-update decay is
+        zeroed so the agent's internal decay becomes a no-op and the schedule
+        is the only thing moving epsilon.
+
+        Args:
+            cfg: The experiment's `training` config block, mutated in place.
+
+        Returns:
+            An EpisodeProgressSchedule, or None when not requested.
+        """
+        if not epsilon_schedule.is_auto_episodes(cfg.get('epsilon_decay')):
+            return None
+
+        decay_type = cfg.get('epsilon_decay_type', 'exponential')
+        if decay_type != 'linear':
+            raise ValueError(
+                f"epsilon_decay: 'auto_episodes' zeroes the per-update decay, "
+                f"which only holds epsilon steady under "
+                f"epsilon_decay_type: 'linear', but the config sets "
+                f"'{decay_type}'."
+            )
+
+        built = epsilon_schedule.build_episode_schedule(
+            training_config=cfg,
+            phase_sizes=self.data_generator._get_consistent_phase_sizes(),
+            test_size=self.config['dataset_creation']['test_size'],
+            num_epochs=cfg.get('num_epochs', 1),
+        )
+        print(epsilon_schedule.format_episode_summary(built))
+
+        schedule = built['schedule']
+        cfg['epsilon_decay'] = [[0.0] * schedule.num_phases
+                                for _ in range(schedule.num_epochs)]
+        cfg['epsilon_schedule_resolved'] = {
+            'mode': epsilon_schedule.AUTO_EPISODES,
+            'train_episodes': built['train_episodes'],
+            'anneal_fraction': built['anneal_fraction'],
+            'epsilon_start': built['epsilon_start'],
+            'epsilon_min': built['epsilon_min'],
+        }
+        return schedule
+
     def _train_agent(self):
         """Handles the main RL training step, potentially with a pre-filled buffer."""
         print("\n--- 3. Agent Training ---")
@@ -275,6 +334,7 @@ class LDPCExperiment(ExperimentBase):
             return
             
         cfg = self.config['training']
+        episode_epsilon_schedule = self._build_episode_epsilon_schedule(cfg)
         training_collectors = self._create_collectors()
 
         # Pass memory management config to trainer
@@ -288,14 +348,38 @@ class LDPCExperiment(ExperimentBase):
             collectors=training_collectors,
             memory_config=memory_config,
             training_flush_saver=training_flush_saver,
+            epsilon_episode_schedule=episode_epsilon_schedule,
             **cfg
         )
         
         # Pass config and metrics_manager for incremental saving and memory management
+        validation = {key: cfg[key] for key in ('eval_frequency', 'eval_episodes')
+                      if key in cfg}
+        if validation:
+            print(f"   In-training validation: {validation}")
+
+        # A run with more than one epoch produces one held-out number for the
+        # whole run, because evaluation happens once at the end. Keeping the
+        # weights from each epoch boundary is what makes the epochs separately
+        # measurable afterwards, on the same test set and at the same epsilon.
+        # The weights are gone once the next epoch overwrites them, so this
+        # cannot be added after the fact.
+        save_epoch_checkpoints = cfg.get('save_epoch_checkpoints', False)
+        epoch_handler = None
+        if save_epoch_checkpoints and cfg['num_epochs'] > 1:
+            def epoch_handler(epoch):
+                path = self.metrics_manager.save_model(
+                    self.agent.network.state_dict(),
+                    {'architecture': 'DQN', 'epoch': epoch},
+                    suffix=f"_epoch{epoch}")
+                print(f"   Saved epoch {epoch} checkpoint to {path.name}")
+
         training_summary = trainer.train(
             num_epochs=cfg['num_epochs'],
             config=self.config,
-            external_metrics_manager=self.metrics_manager
+            external_metrics_manager=self.metrics_manager,
+            on_epoch_end=epoch_handler,
+            **validation
         )
         
         # After training completes, the data has been saved incrementally per phase
@@ -349,8 +433,18 @@ class LDPCExperiment(ExperimentBase):
         else:
             # No weight-modifying steps ran, check if pre-trained model should be used
             load_config = self.config.get('load_pretrained_model', {})
+            explicit_baselines = [b.get('name') for b in
+                                  self.config.get('evaluation', {}).get('baseline_agents', [])
+                                  if b.get('enabled', False)]
             if load_config.get('enabled', False):
                 print(f"Using pre-trained model as specified in configuration")
+            elif explicit_baselines:
+                # With no training and no pretrained model the agent registry leaves
+                # the RL agent out, so nothing untrained can be scored. A config that
+                # names its baselines is a request to score those alone, which is how
+                # a baseline added later is evaluated on an existing held-out split.
+                print(f"No model: evaluating the configured baselines only "
+                      f"({', '.join(explicit_baselines)})")
             else:
                 # No model training and no pre-trained model = invalid configuration
                 raise ValueError(
@@ -518,6 +612,15 @@ class LDPCExperiment(ExperimentBase):
             max_episodes = memory_config.get('max_episodes_per_phase', None)
             flush_frequency = memory_config.get('auto_flush_frequency', 1000)
             enable_progressive = memory_config.get('enable_progressive_saving', True)
+
+        # A memory limit is only meaningful when there is somewhere to flush to.
+        # Without progressive saving the run keeps everything until the single
+        # end-of-run file is written, so no limit is imposed rather than episodes
+        # being dropped at one.
+        if not enable_progressive and max_episodes:
+            print(f"   Progressive saving disabled: ignoring the {max_episodes:,} "
+                  f"episode limit, since a single-file run has nowhere to flush")
+            max_episodes = None
 
         # For training context with progressive saving enabled, create flush callback
         # to save data immediately to disk when memory limits are hit

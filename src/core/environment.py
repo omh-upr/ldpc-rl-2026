@@ -74,10 +74,16 @@ class LDPCEnvironment(BaseEnvironment):
     """
     def __init__(self, code: Optional[LDPC_Code] = None, max_steps=10, 
                  max_flips_vector=6,
-                 reward_function=None):
+                 reward_function=None,
+                 forbid_immediate_reflip: bool = False):
         self.code = code or LDPC_Code.from_default()
         self.max_steps = max_steps
         self.max_flips_vector = max_flips_vector
+        # Flipping the bit that was just flipped restores the codeword exactly, so
+        # the pair costs two steps and can never change the syndrome. Off by default
+        # because it changes the action set, and so the MDP: every configuration
+        # written before this existed keeps the behaviour it was run with.
+        self.forbid_immediate_reflip = forbid_immediate_reflip
 
         self.reward_function = reward_function or ImprovedRewardFunction(code=self.code)
 
@@ -99,6 +105,28 @@ class LDPCEnvironment(BaseEnvironment):
 
         # NEW: Cached legal actions list (static for a given code)
         self._legal_actions = list(range(self.code.action_dim))
+
+        # Bit flipped on the previous step, or None at the start of an episode and
+        # whenever the restriction is off.
+        self._last_flip = None
+
+        # One list and one mask per bit, built once, so narrowing the action set
+        # costs a lookup rather than an allocation on every step. Only built when
+        # the restriction is on: for n=128 this is 128 lists of 128 entries.
+        if self.forbid_immediate_reflip:
+            n_actions = self.code.action_dim
+            self._legal_without = [
+                self._legal_actions[:k] + self._legal_actions[k + 1:]
+                for k in range(self.code.n)
+            ]
+            self._mask_without = []
+            for k in range(self.code.n):
+                mask = np.ones(n_actions, dtype=bool)
+                mask[k] = False
+                self._mask_without.append(mask)
+        else:
+            self._legal_without = None
+            self._mask_without = None
 
         # Incidence structure of H, cached once, for the incremental syndrome and
         # penalty updates in step(). _h_col_rows[j] holds the parity checks that bit j
@@ -126,6 +154,7 @@ class LDPCEnvironment(BaseEnvironment):
         self._syndrome_weight = int(np.sum(self.syndrome))
         self._flip_count = 0  # flip_vector is all zeros
         self._penalty_sum = int(np.sum(self.penalty_vector))
+        self._last_flip = None  # No action has been taken yet in this episode
 
         # NEW: Preallocate state buffer once per episode
         if self._state_buf is None or len(self._state_buf) != self.state_dim:
@@ -151,6 +180,18 @@ class LDPCEnvironment(BaseEnvironment):
         prev_state = None
         if self.reward_function.uses_prev_state:
             prev_state = self.get_state()
+
+        # The restriction is a property of the environment, not a convention the
+        # callers keep. Accepting the action here would let a caller that forgets
+        # the mask train against a larger action set than evaluation offers, and
+        # nothing downstream would say so. Every maintained caller consults
+        # get_action_mask() first, so this cannot fire in the pipeline.
+        if self.forbid_immediate_reflip and action == self._last_flip:
+            raise ValueError(
+                f"bit {action} was flipped on the previous step; flipping it back "
+                f"restores the codeword exactly, and forbid_immediate_reflip "
+                f"refuses it. Consult get_action_mask() or get_legal_actions() "
+                f"before choosing an action.")
 
         # 2. Apply action and update environment
         self.step_count += 1
@@ -183,6 +224,9 @@ class LDPCEnvironment(BaseEnvironment):
                 penalty[covered] += delta
                 self._syndrome_weight += delta
                 self._penalty_sum += delta * covered.size
+
+            # Remember it so the next step can refuse to undo it.
+            self._last_flip = action
         # STOP action leaves the codeword untouched, so the syndrome, penalty vector
         # and their counters are all unchanged -- no recompute needed.
 
@@ -344,13 +388,34 @@ class LDPCEnvironment(BaseEnvironment):
     def get_legal_actions(self):
         """
         Returns list of legal actions for current state.
-        
+
+        The action space is n bit flips plus STOP. With
+        `forbid_immediate_reflip` the bit flipped on the previous step is
+        removed, because flipping it back restores the codeword exactly: the
+        pair spends two of `max_steps` and leaves the syndrome untouched. STOP
+        is never removed, so at least n actions always remain.
+
         Returns:
-            list: Legal action indices (cached, never changes for a given code)
+            list: Legal action indices. Cached, so callers must not mutate it.
         """
-        # Action space is static: n bit flips + 1 STOP action
-        # Cached once in __init__() to avoid repeated list allocations
-        return self._legal_actions
+        if self._last_flip is None or not self.forbid_immediate_reflip:
+            return self._legal_actions
+        return self._legal_without[self._last_flip]
+
+    def get_action_mask(self):
+        """
+        Boolean mask over the action space, or None when nothing is excluded.
+
+        Carries the same restriction as `get_legal_actions` in the form a
+        Q-value based agent can apply directly. None means every action is
+        available, which lets a caller skip the masking work entirely.
+
+        Returns:
+            np.ndarray of bool with one entry per action, or None.
+        """
+        if self._last_flip is None or not self.forbid_immediate_reflip:
+            return None
+        return self._mask_without[self._last_flip]
     
     @property
     def state_components(self) -> Dict[str, Any]:

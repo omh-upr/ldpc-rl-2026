@@ -1,0 +1,804 @@
+{
+  "generated": "2026-09-25T15:29:16",
+  "arguments": {
+    "cells": [
+      "NoC_NoE3ep_s42",
+      "NoC_NoE3ep_s43",
+      "NoC_NoE3ep_s44",
+      "NoC_NoE3ep_s45",
+      "NoC_NoE3ep_s46"
+    ],
+    "config_root": "config/ablation_config",
+    "frames": 5000,
+    "repeats": 3,
+    "sample_seed": 0,
+    "devices": [
+      "cuda",
+      "cpu"
+    ],
+    "cpu_threads": 1,
+    "batch_sizes": [
+      1,
+      16,
+      256,
+      1024,
+      4096
+    ],
+    "min_seconds": 1.0,
+    "no_verify": false,
+    "output_dir": "results/benchmark"
+  },
+  "machine": {
+    "cpu": "12th Gen Intel(R) Core(TM) i7-12700",
+    "gpu_before": {
+      "name": "NVIDIA GeForce RTX 3060 Ti",
+      "utilisation_pct": 17,
+      "memory_used_mib": 1631
+    },
+    "python": "3.12.13",
+    "torch": "2.10.0+cu128",
+    "numpy": "2.4.2",
+    "platform": "Linux-7.0.0-34-generic-x86_64-with-glibc2.43",
+    "gpu_after": {
+      "name": "NVIDIA GeForce RTX 3060 Ti",
+      "utilisation_pct": 16,
+      "memory_used_mib": 1748
+    }
+  },
+  "constants": {
+    "ops_per_edge": 19,
+    "ops_per_hidden_unit": 10
+  },
+  "cells": {
+    "NoC_NoE3ep_s42": {
+      "model": "models/ablation/NoC_NoE3ep_s42/ldpc_rl_agent_20260924_153031.pth",
+      "dataset": "data/ablation/s42/flat.h5",
+      "runs": {
+        "rl@cuda": {
+          "agent": "rl",
+          "device": "cuda",
+          "success_pct": 96.3,
+          "decisions_per_frame": 4.8386,
+          "iterations_per_frame": null,
+          "parameters": 906049,
+          "ops_per_frame": 8802511.7622,
+          "latency_median_s": 0.0010917274994426407,
+          "latency_mean_s": 0.0011113515510529396,
+          "latency_p99_s": 0.0026753360620932654,
+          "decision_median_s": 0.000918776500839158,
+          "decision_mean_s": 0.000935239494285876,
+          "frames_per_s": 899.8052857824865,
+          "repeat_mean_latency_s": [
+            0.0011251722995795717,
+            0.001103855166383437,
+            0.0011050271871958102
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "rl@cpu": {
+          "agent": "rl",
+          "device": "cpu",
+          "success_pct": 96.3,
+          "decisions_per_frame": 4.8386,
+          "iterations_per_frame": null,
+          "parameters": 906049,
+          "ops_per_frame": 8802511.7622,
+          "latency_median_s": 0.0007661514991923468,
+          "latency_mean_s": 0.0007705049143325595,
+          "latency_p99_s": 0.001895163420413155,
+          "decision_median_s": 0.0006314540005405433,
+          "decision_mean_s": 0.0006339591768519312,
+          "frames_per_s": 1297.8502555901773,
+          "repeat_mean_latency_s": [
+            0.0007718502035597339,
+            0.0007708379612158751,
+            0.0007688265782220696
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "greedy@cpu": {
+          "agent": "greedy",
+          "device": "cpu",
+          "success_pct": 72.68,
+          "decisions_per_frame": 5.8,
+          "iterations_per_frame": null,
+          "parameters": 0,
+          "ops_per_frame": 1484.8,
+          "latency_median_s": 0.00012694050019490533,
+          "latency_mean_s": 0.0001503404447993186,
+          "latency_p99_s": 0.0002877651104063261,
+          "decision_median_s": 4.611949771060608e-05,
+          "decision_mean_s": 5.3593567349162184e-05,
+          "frames_per_s": 6651.570050460116,
+          "repeat_mean_latency_s": [
+            0.0001449636294033553,
+            0.0001584381475848204,
+            0.0001476195574097801
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "min_sum_expert@cpu": {
+          "agent": "min_sum_expert",
+          "device": "cpu",
+          "success_pct": 99.88,
+          "decisions_per_frame": 4.5274,
+          "iterations_per_frame": 3.096,
+          "parameters": 0,
+          "ops_per_frame": 30373.888,
+          "latency_median_s": 0.00022974199964664876,
+          "latency_mean_s": 0.00025631133427111004,
+          "latency_p99_s": 0.00058509829108516,
+          "decision_median_s": 0.00013823500376020093,
+          "decision_mean_s": 0.0001744283866302188,
+          "frames_per_s": 3901.5051864318366,
+          "repeat_mean_latency_s": [
+            0.0002554419528161816,
+            0.00025601623820184613,
+            0.00025747581179530243
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "gallager_b@cpu": {
+          "agent": "gallager_b",
+          "device": "cpu",
+          "success_pct": 78.54,
+          "decisions_per_frame": 3.368,
+          "iterations_per_frame": 5.7624,
+          "parameters": 0,
+          "ops_per_frame": 25589.9648,
+          "latency_median_s": 0.00011304150029900484,
+          "latency_mean_s": 0.00015643634740505755,
+          "latency_p99_s": 0.0003510443601044244,
+          "decision_median_s": 4.171750151726883e-05,
+          "decision_mean_s": 9.489098199410364e-05,
+          "frames_per_s": 6392.376302488831,
+          "repeat_mean_latency_s": [
+            0.0001571668622054858,
+            0.0001556478124075511,
+            0.00015649436760213577
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        }
+      }
+    },
+    "NoC_NoE3ep_s43": {
+      "model": "models/ablation/NoC_NoE3ep_s43/ldpc_rl_agent_20260924_183041.pth",
+      "dataset": "data/ablation/s43/flat.h5",
+      "runs": {
+        "rl@cuda": {
+          "agent": "rl",
+          "device": "cuda",
+          "success_pct": 96.96,
+          "decisions_per_frame": 4.7932,
+          "iterations_per_frame": null,
+          "parameters": 906049,
+          "ops_per_frame": 8719918.8564,
+          "latency_median_s": 0.0010832025000127032,
+          "latency_mean_s": 0.001097594396263594,
+          "latency_p99_s": 0.002667068500413734,
+          "decision_median_s": 0.000912466000954737,
+          "decision_mean_s": 0.0009241505596619391,
+          "frames_per_s": 911.0833686871739,
+          "repeat_mean_latency_s": [
+            0.0010977287169909686,
+            0.0011001951859914698,
+            0.001094859285808343
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "rl@cpu": {
+          "agent": "rl",
+          "device": "cpu",
+          "success_pct": 96.96,
+          "decisions_per_frame": 4.7932,
+          "iterations_per_frame": null,
+          "parameters": 906049,
+          "ops_per_frame": 8719918.8564,
+          "latency_median_s": 0.000770014499721583,
+          "latency_mean_s": 0.0007766495307349639,
+          "latency_p99_s": 0.00189082051962032,
+          "decision_median_s": 0.00063497150222247,
+          "decision_mean_s": 0.0006404315196780468,
+          "frames_per_s": 1287.5820565470162,
+          "repeat_mean_latency_s": [
+            0.0007897231790106161,
+            0.0007735915687982924,
+            0.000766633844395983
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "greedy@cpu": {
+          "agent": "greedy",
+          "device": "cpu",
+          "success_pct": 72.84,
+          "decisions_per_frame": 5.7406,
+          "iterations_per_frame": null,
+          "parameters": 0,
+          "ops_per_frame": 1469.5936,
+          "latency_median_s": 0.0001252684996870812,
+          "latency_mean_s": 0.00014337602990635787,
+          "latency_p99_s": 0.00027970302926405566,
+          "decision_median_s": 4.5738002881989814e-05,
+          "decision_mean_s": 5.2567658057038596e-05,
+          "frames_per_s": 6974.666550978728,
+          "repeat_mean_latency_s": [
+            0.00014311283298156923,
+            0.00014324735895279446,
+            0.00014376789778470993
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "min_sum_expert@cpu": {
+          "agent": "min_sum_expert",
+          "device": "cpu",
+          "success_pct": 99.88,
+          "decisions_per_frame": 4.4778,
+          "iterations_per_frame": 3.0694,
+          "parameters": 0,
+          "ops_per_frame": 30115.123199999998,
+          "latency_median_s": 0.00022594100119022187,
+          "latency_mean_s": 0.00025799385972786695,
+          "latency_p99_s": 0.0006236423899827061,
+          "decision_median_s": 0.00013572900206781924,
+          "decision_mean_s": 0.00017303516585598117,
+          "frames_per_s": 3876.0612405845795,
+          "repeat_mean_latency_s": [
+            0.00025389110481337414,
+            0.0002660022803938773,
+            0.00025408819397634944
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "gallager_b@cpu": {
+          "agent": "gallager_b",
+          "device": "cpu",
+          "success_pct": 78.42,
+          "decisions_per_frame": 3.3216,
+          "iterations_per_frame": 5.7832,
+          "parameters": 0,
+          "ops_per_frame": 25680.486399999998,
+          "latency_median_s": 0.00011141100003442261,
+          "latency_mean_s": 0.00015612137562129647,
+          "latency_p99_s": 0.00034465937809727623,
+          "decision_median_s": 4.161800097790547e-05,
+          "decision_mean_s": 9.513343187718419e-05,
+          "frames_per_s": 6405.272795095653,
+          "repeat_mean_latency_s": [
+            0.00015543679542970494,
+            0.0001576790858358436,
+            0.00015524824559834087
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        }
+      }
+    },
+    "NoC_NoE3ep_s44": {
+      "model": "models/ablation/NoC_NoE3ep_s44/ldpc_rl_agent_20260924_212835.pth",
+      "dataset": "data/ablation/s44/flat.h5",
+      "runs": {
+        "rl@cuda": {
+          "agent": "rl",
+          "device": "cuda",
+          "success_pct": 96.72,
+          "decisions_per_frame": 4.8186,
+          "iterations_per_frame": null,
+          "parameters": 906049,
+          "ops_per_frame": 8766127.2222,
+          "latency_median_s": 0.001102620999517967,
+          "latency_mean_s": 0.0011223284292442258,
+          "latency_p99_s": 0.002724179370343336,
+          "decision_median_s": 0.0009301250029238872,
+          "decision_mean_s": 0.000946676438205274,
+          "frames_per_s": 891.0047842888542,
+          "repeat_mean_latency_s": [
+            0.0011221764485890163,
+            0.001121770142573223,
+            0.0011230386965704383
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "rl@cpu": {
+          "agent": "rl",
+          "device": "cpu",
+          "success_pct": 96.72,
+          "decisions_per_frame": 4.8186,
+          "iterations_per_frame": null,
+          "parameters": 906049,
+          "ops_per_frame": 8766127.2222,
+          "latency_median_s": 0.0007771969994792016,
+          "latency_mean_s": 0.0007790518354777305,
+          "latency_p99_s": 0.0019105927114651422,
+          "decision_median_s": 0.0006401155005733017,
+          "decision_mean_s": 0.0006401504661077827,
+          "frames_per_s": 1283.611634631192,
+          "repeat_mean_latency_s": [
+            0.0007808803961750527,
+            0.0007776692740160797,
+            0.000778605836242059
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "greedy@cpu": {
+          "agent": "greedy",
+          "device": "cpu",
+          "success_pct": 71.92,
+          "decisions_per_frame": 5.835,
+          "iterations_per_frame": null,
+          "parameters": 0,
+          "ops_per_frame": 1493.76,
+          "latency_median_s": 0.00012831250023737084,
+          "latency_mean_s": 0.0001523878134454814,
+          "latency_p99_s": 0.000286117009636655,
+          "decision_median_s": 4.63164960819995e-05,
+          "decision_mean_s": 5.391687131220048e-05,
+          "frames_per_s": 6562.204531911355,
+          "repeat_mean_latency_s": [
+            0.00016139166818611556,
+            0.00014706287178851198,
+            0.00014870890036181662
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "min_sum_expert@cpu": {
+          "agent": "min_sum_expert",
+          "device": "cpu",
+          "success_pct": 99.88,
+          "decisions_per_frame": 4.5032,
+          "iterations_per_frame": 3.0944,
+          "parameters": 0,
+          "ops_per_frame": 30358.3232,
+          "latency_median_s": 0.00023092050105333328,
+          "latency_mean_s": 0.00025532215099592577,
+          "latency_p99_s": 0.0005979060388563085,
+          "decision_median_s": 0.0001402039979438996,
+          "decision_mean_s": 0.00017337926355515568,
+          "frames_per_s": 3916.620614777592,
+          "repeat_mean_latency_s": [
+            0.0002566198010033986,
+            0.0002536065886088181,
+            0.00025574006337556056
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "gallager_b@cpu": {
+          "agent": "gallager_b",
+          "device": "cpu",
+          "success_pct": 77.98,
+          "decisions_per_frame": 3.3098,
+          "iterations_per_frame": 5.8668,
+          "parameters": 0,
+          "ops_per_frame": 26044.313599999998,
+          "latency_median_s": 0.0001128229996538721,
+          "latency_mean_s": 0.00016203569214291445,
+          "latency_p99_s": 0.00034662523183214943,
+          "decision_median_s": 4.184999670542311e-05,
+          "decision_mean_s": 9.623660512879724e-05,
+          "frames_per_s": 6171.479794204886,
+          "repeat_mean_latency_s": [
+            0.00015810340919197188,
+            0.0001706710822196328,
+            0.00015733258501713862
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        }
+      }
+    },
+    "NoC_NoE3ep_s45": {
+      "model": "models/ablation/NoC_NoE3ep_s45/ldpc_rl_agent_20260925_075907.pth",
+      "dataset": "data/ablation/s45/flat.h5",
+      "runs": {
+        "rl@cuda": {
+          "agent": "rl",
+          "device": "cuda",
+          "success_pct": 97.28,
+          "decisions_per_frame": 4.7286,
+          "iterations_per_frame": null,
+          "parameters": 906049,
+          "ops_per_frame": 8602396.792200001,
+          "latency_median_s": 0.0011030665009457152,
+          "latency_mean_s": 0.001112400112416799,
+          "latency_p99_s": 0.0027203248588193673,
+          "decision_median_s": 0.0009299905013904208,
+          "decision_mean_s": 0.0009379349482243318,
+          "frames_per_s": 898.95711879011,
+          "repeat_mean_latency_s": [
+            0.0011079600812219724,
+            0.001108880738420703,
+            0.0011203595176077215
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "rl@cpu": {
+          "agent": "rl",
+          "device": "cpu",
+          "success_pct": 97.28,
+          "decisions_per_frame": 4.7286,
+          "iterations_per_frame": null,
+          "parameters": 906049,
+          "ops_per_frame": 8602396.792200001,
+          "latency_median_s": 0.0007685194996156497,
+          "latency_mean_s": 0.0007612651841385135,
+          "latency_p99_s": 0.0018900173493602778,
+          "decision_median_s": 0.0006331749991659308,
+          "decision_mean_s": 0.0006257461599217397,
+          "frames_per_s": 1313.6026982918588,
+          "repeat_mean_latency_s": [
+            0.0007599641258253542,
+            0.0007634316595976998,
+            0.0007603997669924866
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "greedy@cpu": {
+          "agent": "greedy",
+          "device": "cpu",
+          "success_pct": 73.06,
+          "decisions_per_frame": 5.7452,
+          "iterations_per_frame": null,
+          "parameters": 0,
+          "ops_per_frame": 1470.7712,
+          "latency_median_s": 0.00012625149975065142,
+          "latency_mean_s": 0.00014510303171700798,
+          "latency_p99_s": 0.000286276480255765,
+          "decision_median_s": 4.576149513013661e-05,
+          "decision_mean_s": 5.288927521760343e-05,
+          "frames_per_s": 6891.654765355167,
+          "repeat_mean_latency_s": [
+            0.00014488967080251313,
+            0.0001456356083857827,
+            0.0001447838159627281
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "min_sum_expert@cpu": {
+          "agent": "min_sum_expert",
+          "device": "cpu",
+          "success_pct": 99.94,
+          "decisions_per_frame": 4.4748,
+          "iterations_per_frame": 3.1052,
+          "parameters": 0,
+          "ops_per_frame": 30463.3856,
+          "latency_median_s": 0.00022817849821876734,
+          "latency_mean_s": 0.00025857965075265385,
+          "latency_p99_s": 0.000612184461497236,
+          "decision_median_s": 0.00013884849795431364,
+          "decision_mean_s": 0.0001733521785395472,
+          "frames_per_s": 3867.280341238286,
+          "repeat_mean_latency_s": [
+            0.00026759764922389877,
+            0.00025361798302619715,
+            0.00025452332000786557
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "gallager_b@cpu": {
+          "agent": "gallager_b",
+          "device": "cpu",
+          "success_pct": 78.82,
+          "decisions_per_frame": 3.3304,
+          "iterations_per_frame": 5.7402,
+          "parameters": 0,
+          "ops_per_frame": 25493.3504,
+          "latency_median_s": 0.0001137135004682932,
+          "latency_mean_s": 0.00015702424932605936,
+          "latency_p99_s": 0.00034841782744479135,
+          "decision_median_s": 4.1845500163617544e-05,
+          "decision_mean_s": 9.51766371448078e-05,
+          "frames_per_s": 6368.443118129541,
+          "repeat_mean_latency_s": [
+            0.0001573374925799726,
+            0.00015743832680018387,
+            0.00015629692859802163
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        }
+      }
+    },
+    "NoC_NoE3ep_s46": {
+      "model": "models/ablation/NoC_NoE3ep_s46/ldpc_rl_agent_20260925_110722.pth",
+      "dataset": "data/ablation/s46/flat.h5",
+      "runs": {
+        "rl@cuda": {
+          "agent": "rl",
+          "device": "cuda",
+          "success_pct": 96.18,
+          "decisions_per_frame": 4.8412,
+          "iterations_per_frame": null,
+          "parameters": 906049,
+          "ops_per_frame": 8807241.7524,
+          "latency_median_s": 0.0010905139988608425,
+          "latency_mean_s": 0.0011105179893059055,
+          "latency_p99_s": 0.002684180921787629,
+          "decision_median_s": 0.000917843499337323,
+          "decision_mean_s": 0.000935131419202662,
+          "frames_per_s": 900.4806852566329,
+          "repeat_mean_latency_s": [
+            0.001112803629960399,
+            0.0011103078472049675,
+            0.0011084424907523498
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "rl@cpu": {
+          "agent": "rl",
+          "device": "cpu",
+          "success_pct": 96.18,
+          "decisions_per_frame": 4.8412,
+          "iterations_per_frame": null,
+          "parameters": 906049,
+          "ops_per_frame": 8807241.7524,
+          "latency_median_s": 0.000769154001318384,
+          "latency_mean_s": 0.0007769838541358088,
+          "latency_p99_s": 0.0018906906709526086,
+          "decision_median_s": 0.0006329070020001382,
+          "decision_mean_s": 0.0006388489829388467,
+          "frames_per_s": 1287.0280311194347,
+          "repeat_mean_latency_s": [
+            0.0007685889643980772,
+            0.0007729304448163021,
+            0.0007894321531930473
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "greedy@cpu": {
+          "agent": "greedy",
+          "device": "cpu",
+          "success_pct": 73.24,
+          "decisions_per_frame": 5.7428,
+          "iterations_per_frame": null,
+          "parameters": 0,
+          "ops_per_frame": 1470.1568,
+          "latency_median_s": 0.0001261215002159588,
+          "latency_mean_s": 0.00014507179554905936,
+          "latency_p99_s": 0.000286590188734408,
+          "decision_median_s": 4.5825001507182606e-05,
+          "decision_mean_s": 5.301441284973407e-05,
+          "frames_per_s": 6893.138643629919,
+          "repeat_mean_latency_s": [
+            0.00014474764941842296,
+            0.00014557187082245946,
+            0.0001448958664062957
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "min_sum_expert@cpu": {
+          "agent": "min_sum_expert",
+          "device": "cpu",
+          "success_pct": 99.94,
+          "decisions_per_frame": 4.486,
+          "iterations_per_frame": 3.0866,
+          "parameters": 0,
+          "ops_per_frame": 30282.444799999997,
+          "latency_median_s": 0.00023082799998519477,
+          "latency_mean_s": 0.0002541255475994452,
+          "latency_p99_s": 0.0005735051894953359,
+          "decision_median_s": 0.00014195699986885302,
+          "decision_mean_s": 0.00017355974293895997,
+          "frames_per_s": 3935.0628437256078,
+          "repeat_mean_latency_s": [
+            0.00025299270777686615,
+            0.0002533598168018216,
+            0.00025602411821964776
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        },
+        "gallager_b@cpu": {
+          "agent": "gallager_b",
+          "device": "cpu",
+          "success_pct": 77.92,
+          "decisions_per_frame": 3.2968,
+          "iterations_per_frame": 5.886,
+          "parameters": 0,
+          "ops_per_frame": 26127.872,
+          "latency_median_s": 0.00011431499842728954,
+          "latency_mean_s": 0.00016350618907211658,
+          "latency_p99_s": 0.0003518590083331219,
+          "decision_median_s": 4.217949935991783e-05,
+          "decision_mean_s": 9.750834436029739e-05,
+          "frames_per_s": 6115.976439026028,
+          "repeat_mean_latency_s": [
+            0.0001726901417998306,
+            0.0001585506394141703,
+            0.0001592777860023489
+          ],
+          "verification": 0,
+          "nondeterministic_frames": 0
+        }
+      }
+    }
+  },
+  "throughput": {
+    "cuda": {
+      "cell": "NoC_NoE3ep_s42",
+      "decisions_per_frame": 4.8386,
+      "rows": [
+        {
+          "batch": 1,
+          "calls": 8580,
+          "us_per_call": 116.56689545449568,
+          "states_per_s": 8578.764975261529
+        },
+        {
+          "batch": 16,
+          "calls": 9710,
+          "us_per_call": 103.08679866115766,
+          "states_per_s": 155209.01034662433
+        },
+        {
+          "batch": 256,
+          "calls": 6530,
+          "us_per_call": 153.30178254199015,
+          "states_per_s": 1669908.827902117
+        },
+        {
+          "batch": 1024,
+          "calls": 2410,
+          "us_per_call": 415.14076514567364,
+          "states_per_s": 2466633.2144969585
+        },
+        {
+          "batch": 4096,
+          "calls": 690,
+          "us_per_call": 1450.4267594231246,
+          "states_per_s": 2823996.4364895574
+        }
+      ]
+    },
+    "cpu": {
+      "cell": "NoC_NoE3ep_s42",
+      "decisions_per_frame": 4.8386,
+      "rows": [
+        {
+          "batch": 1,
+          "calls": 10020,
+          "us_per_call": 99.80075049891761,
+          "states_per_s": 10019.964729732625
+        },
+        {
+          "batch": 16,
+          "calls": 2650,
+          "us_per_call": 377.3991800012739,
+          "states_per_s": 42395.42862797421
+        },
+        {
+          "batch": 256,
+          "calls": 280,
+          "us_per_call": 3625.0885500001978,
+          "states_per_s": 70618.96460432284
+        },
+        {
+          "batch": 1024,
+          "calls": 70,
+          "us_per_call": 14722.834485707737,
+          "states_per_s": 69551.82448013342
+        },
+        {
+          "batch": 4096,
+          "calls": 20,
+          "us_per_call": 60452.219800026796,
+          "states_per_s": 67755.98999589068
+        }
+      ]
+    }
+  },
+  "summary": {
+    "rl@cuda": {
+      "agent": "rl",
+      "device": "cuda",
+      "success_pct": 96.688,
+      "decisions_per_frame": 4.80404,
+      "iterations_per_frame": null,
+      "parameters": 906049,
+      "ops_per_frame": 8739639.27708,
+      "latency_median_s": 0.0010935609989246586,
+      "latency_p99_s": 0.00269834345934214,
+      "decision_median_s": 0.0009210170010192087,
+      "frames_per_s": 900.2208727100616
+    },
+    "rl@cpu": {
+      "agent": "rl",
+      "device": "cpu",
+      "success_pct": 96.688,
+      "decisions_per_frame": 4.80404,
+      "iterations_per_frame": null,
+      "parameters": 906049,
+      "ops_per_frame": 8739639.27708,
+      "latency_median_s": 0.0007685320015298203,
+      "latency_p99_s": 0.0018954282985578174,
+      "decision_median_s": 0.0006329155021376209,
+      "frames_per_s": 1293.8433977099996
+    },
+    "greedy@cpu": {
+      "agent": "greedy",
+      "device": "cpu",
+      "success_pct": 72.748,
+      "decisions_per_frame": 5.77272,
+      "iterations_per_frame": null,
+      "parameters": 0,
+      "ops_per_frame": 1477.81632,
+      "latency_median_s": 0.0001265854989469517,
+      "latency_p99_s": 0.00028585712054336905,
+      "decision_median_s": 4.594500205712393e-05,
+      "frames_per_s": 6790.90292703286
+    },
+    "min_sum_expert@cpu": {
+      "agent": "min_sum_expert",
+      "device": "cpu",
+      "success_pct": 99.904,
+      "decisions_per_frame": 4.49384,
+      "iterations_per_frame": 3.0903199999999997,
+      "parameters": 0,
+      "ops_per_frame": 30318.63296,
+      "latency_median_s": 0.00022916749912837986,
+      "latency_p99_s": 0.0005938516002788671,
+      "decision_median_s": 0.00013849749666405842,
+      "frames_per_s": 3899.1445908013507
+    },
+    "gallager_b@cpu": {
+      "agent": "gallager_b",
+      "device": "cpu",
+      "success_pct": 78.336,
+      "decisions_per_frame": 3.32532,
+      "iterations_per_frame": 5.80772,
+      "parameters": 0,
+      "ops_per_frame": 25787.19744,
+      "latency_median_s": 0.00011305200132483151,
+      "latency_p99_s": 0.0003492673566506708,
+      "decision_median_s": 4.18110030295793e-05,
+      "frames_per_s": 6288.328513308634
+    }
+  },
+  "network": {
+    "parameters": 906049,
+    "macs_per_forward": 900670,
+    "ops_per_forward": 1819227,
+    "layers": [
+      [
+        451,
+        640
+      ],
+      [
+        640,
+        480
+      ],
+      [
+        480,
+        360
+      ],
+      [
+        360,
+        270
+      ],
+      [
+        270,
+        129
+      ]
+    ]
+  },
+  "state_update_ops_per_flip": 33.0,
+  "elapsed_s": 325.36384677000024
+}

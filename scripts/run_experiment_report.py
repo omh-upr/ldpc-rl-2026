@@ -27,6 +27,7 @@ Usage:
 import argparse
 import subprocess
 import os
+import sys
 from pathlib import Path
 from src.utils.path_utils import resolve_project_path
 
@@ -174,7 +175,13 @@ class ReportGenerator:
             if marker_found:
                 output_lines.append(line)
 
-        table_content = '\n'.join(output_lines).strip() if output_lines else result.stdout.strip()
+        if not marker_found:
+            # Only a failed run prints no marker: every successful --data-only run
+            # emits one. Falling back to raw stdout here is what put the loader's
+            # error message into the report and let it pass as a result.
+            raise RuntimeError(
+                f"Analysis '{analysis_id}' produced no results table:\n{result.stdout.strip()}")
+        table_content = '\n'.join(output_lines).strip()
 
         # Optionally prepend metadata (title and description)
         if self.include_metadata:
@@ -193,6 +200,11 @@ class ReportGenerator:
         3. Collects results in a dictionary
         4. Renders the template with analysis results
         5. Writes the final report to disk
+
+        Returns:
+            0 when every analysis succeeded, 1 otherwise. The report is still
+            written when analyses fail, since a partial one is worth reading, but
+            a run that produced failure notices must not be announced as a success.
         """
         # Extract required analyses from template
         required_analyses = self._extract_analysis_ids_from_template()
@@ -201,7 +213,7 @@ class ReportGenerator:
             print("No analysis placeholders found in template. Nothing to do.")
             print(f"    Template: {self.template_path}")
             print(f"    Expected format: {{{{analysis_id}}}}")
-            return
+            return 1
 
         print(f"Starting report generation for experiment: {self.experiment_id}")
         print(f"Found {len(required_analyses)} analyses in template...\n")
@@ -216,6 +228,7 @@ class ReportGenerator:
             rebuild_db_flag = True
 
         analysis_results = {}
+        failed = []
 
         for i, analysis_id in enumerate(required_analyses, 1):
             print(f"[{i}/{len(required_analyses)}] Running analysis: {analysis_id}...", end=" ")
@@ -227,11 +240,23 @@ class ReportGenerator:
             except RuntimeError as e:
                 print("FAILED")
                 print(f"    Error: {str(e)}")
+                failed.append(analysis_id)
                 analysis_results[analysis_id] = f"**ANALYSIS FAILED**\n\n```\n{e}\n```"
 
         print(f"\nRendering template and writing report...")
-        self._render_and_write_report(analysis_results)
+        if not self._render_and_write_report(analysis_results):
+            return 1
+
+        # The report is still written, because a partial one is worth reading, but
+        # it is not a success and must not be announced as one. Every section of it
+        # can be a failure notice.
+        if failed:
+            print(f"Wrote {self.report_path} with {len(failed)} of "
+                  f"{len(required_analyses)} analyses failed: {', '.join(failed)}",
+                  file=sys.stderr)
+            return 1
         print(f"Successfully generated report: {self.report_path}")
+        return 0
 
     def _render_and_write_report(self, results: dict):
         """
@@ -239,14 +264,18 @@ class ReportGenerator:
 
         Args:
             results: Dictionary mapping analysis_id to markdown-formatted results
+
+        Returns:
+            True when the report was written.
         """
         try:
             with open(self.template_path, "r") as f:
                 template_content = f.read()
         except FileNotFoundError:
-            print(f"Error: Template file not found at {self.template_path}")
-            print(f"    Please ensure the template exists or specify a valid path with --template")
-            return
+            print(f"Error: Template file not found at {self.template_path}", file=sys.stderr)
+            print(f"    Please ensure the template exists or specify a valid path "
+                  f"with --template", file=sys.stderr)
+            return False
 
         # Add experiment_id for use as a placeholder in the template
         results['experiment_id'] = self.experiment_id
@@ -263,6 +292,7 @@ class ReportGenerator:
         # Write the final report
         with open(self.report_path, "w") as f:
             f.write(rendered_content)
+        return True
 
 
 def main():
@@ -327,8 +357,8 @@ Notes:
         include_metadata=not args.no_metadata,
         results_dir=args.results_dir,
     )
-    generator.generate_report()
+    return generator.generate_report()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

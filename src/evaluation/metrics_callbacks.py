@@ -179,6 +179,7 @@ class EpisodeDataCollector(MetricCollector):
             "episode_id": episode_data.get("episode_id"),
             "episode_type": episode_data.get("episode_type"),
             "agent_type": episode_data.get("agent_type"),
+            "epoch": episode_data.get("epoch"),
             "phase": episode_data.get("phase"),
             "original_codeword": episode_data.get("original_codeword"),
             "noisy_codeword": episode_data.get("noisy_codeword"),
@@ -218,13 +219,27 @@ class EpisodeDataCollector(MetricCollector):
                 self._flush_episodes()
     
     def _flush_episodes(self) -> None:
-        """Flush episodes to free memory, calling the flush callback if provided."""
-        if self.flush_callback and self.episodes:
+        """Hand episodes to the flush callback and drop them.
+
+        Without a callback there is nowhere for the episodes to go, so clearing
+        them would be silent data loss. In that case they are kept and the limit
+        is reported instead; whoever configured a limit without a destination is
+        asking for unbounded memory, and that is better than a partial result
+        nobody was told about.
+        """
+        if not self.flush_callback:
+            if self.episodes:
+                print(f"   {self.name} reached its {self.max_episodes} episode limit "
+                      f"with no flush destination; keeping {len(self.episodes)} "
+                      f"episodes in memory")
+            return
+
+        if self.episodes:
             # Make a copy for the callback
             episodes_to_flush = self.episodes.copy()
             self.flush_callback(episodes_to_flush)
             print(f"   Flushed {len(episodes_to_flush)} episodes from {self.name}")
-        
+
         # Clear the episodes to free memory
         self.episodes.clear()
         print(f"   Cleared {self.name} memory")
@@ -290,7 +305,7 @@ class MetricsCollectorManager:
     def enable_collector(self, collector_name: str) -> bool:
         """Enable a specific collector. Returns True if found."""
         collector = self.get_collector(collector_name)
-        if collector:
+        if collector is not None:
             collector.enable()
             return True
         return False
@@ -298,7 +313,7 @@ class MetricsCollectorManager:
     def disable_collector(self, collector_name: str) -> bool:
         """Disable a specific collector. Returns True if found."""
         collector = self.get_collector(collector_name)
-        if collector:
+        if collector is not None:
             collector.disable()
             return True
         return False

@@ -11,7 +11,7 @@ run_evaluation: true
 
 # Dataset and expert replay
 dataset_creation:
-  config_path: "56x80/main_dataset_config.json" # Curriculum configuration
+  config_path: "config/experiments_config/56x80/main_dataset_config.json" # Curriculum configuration
   output_path: "data/ldpc_56x80_main_dataset.h5"
   test_size: 0.35
   force_recreate: false # If true, recreates dataset even if it exists

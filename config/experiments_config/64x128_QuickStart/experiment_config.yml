@@ -3,17 +3,15 @@
 # Goal: end-to-end workflow validation in a few minutes on a single GPU. Three
 # curriculum phases are kept so phase transitions are exercised, and the memory
 # limits are sized so Phase 3 trips a mid-phase flush (producing a
-# *_training_phase3_flush1.json.gz file). The production LDPCOptimizedMLP
+# *_training_epoch1_phase3_flush1.json.gz file). The production LDPCOptimizedMLP
 # network and expert seeding are kept so the smoke test covers the same code
 # paths as 64x128_Full.
 #
-# Path note: the multi-matrix orchestrator (scripts/run_multi_matrix_experiments.py)
-# hard-codes the main/expert dataset output paths to data/ldpc_{code_id}_*.h5.
-# We keep those .h5 names so a one-command run via the orchestrator works
-# end-to-end; running QuickStart will overwrite any existing Full datasets at
-# those paths (they regenerate with force_recreate=true). The expert .pkl uses a
-# distinct quickstart_* name so the slow-to-regenerate 64x128_omniscient_500000.pkl
-# is never clobbered.
+# Path note: this config shares the main dataset path with 64x128_Full, so
+# running QuickStart overwrites the Full dataset there (it regenerates, since
+# force_recreate is true). The expert .pkl uses a distinct quickstart_* name so
+# the slow-to-regenerate 64x128_omniscient_500000.pkl is never clobbered. The
+# multi-matrix orchestrator reads the paths below rather than imposing its own.
 
 experiment_name: "QuickStart_64x128"
 seed: 42
@@ -93,8 +91,9 @@ output_paths:
   models_dir: "models/"
 
 # Memory management — sized so Phase 3 (~2.4k train episodes) trips a mid-phase
-# flush, producing a *_training_phase3_flush1.json.gz alongside the per-phase
-# files. Evaluation (~2.4k episodes per agent) does the same on the eval side.
+# flush, producing a *_training_epoch{E}_phase3_flush1.json.gz alongside the
+# per-segment files. Evaluation (~2.4k episodes per agent) does the same on the
+# eval side.
 memory_management:
   training:
     max_episodes_per_phase: 2000

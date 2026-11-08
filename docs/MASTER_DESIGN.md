@@ -85,6 +85,8 @@ Therefore the action dimension is:
 
 For `64x128`, the action dimension is `129`.
 
+The environment can optionally restrict this set. With `forbid_immediate_reflip` enabled, the bit flipped at step \(t-1\) is not a legal action at step \(t\): flipping it back restores \(\hat{x}_{t-1}\) exactly, so the pair spends two steps and cannot change the syndrome. The restriction is exposed to every agent through the legal-action list, and the learned agent also excludes that action from the bootstrap maximum in Section 5.1. It changes the MDP, so it is off by default.
+
 ### 3.4 Transition Dynamics
 
 If the selected action is a bit index \(a < n\), the environment toggles bit \(a\) in the current estimate, recomputes the syndrome, recomputes the penalty vector, updates the flip-history vector, and increments the step counter.
@@ -184,6 +186,8 @@ r + \gamma \max_{a'} Q(s', a'; \theta^-) & \text{if } d = 0
 \end{cases}
 \]
 
+When the re-flip restriction of Section 3.3 is enabled, the maximum over \(a'\) excludes the action \(a\) that produced the transition, since it is illegal in \(s'\). No mask has to be stored with the transition: the excluded action is the one already in the tuple.
+
 The target network parameters are synchronized periodically:
 
 \[
@@ -194,7 +198,7 @@ The discount factor \(\gamma\) is set close to 1 (default 0.99) to encourage lon
 
 ### 5.2 Curriculum and Expert Replay Seeding
 
-Training is off-policy and curriculum-driven. The dataset is organized into six sequential phases of increasing error difficulty, and the agent trains on each phase in order. Exploration is controlled by per-phase epsilon schedules: each phase has its own \(\epsilon_{\text{start}}\), \(\epsilon_{\text{decay}}\), and \(\epsilon_{\min}\), and epsilon is optionally reset to \(\epsilon_{\text{start}}\) at each phase boundary.
+Training is off-policy and curriculum-driven. The dataset is organized into six sequential phases of increasing error difficulty, and the agent trains on each phase in order, optionally for several epochs; each epoch restarts at phase 1. Exploration is controlled by per-phase epsilon schedules: each phase has its own \(\epsilon_{\text{start}}\), \(\epsilon_{\text{decay}}\), and \(\epsilon_{\min}\), and epsilon is optionally reset to \(\epsilon_{\text{start}}\) at each phase boundary. Each epoch may carry its own row of these values, and is always re-seeded to its own opening value. Two forms of decay exist: an explicit per-update decrement, and `auto_episodes`, which sets epsilon at the start of every episode from the fraction of the phase completed, falling linearly to \(\epsilon_{\min}\) after a configured fraction of the phase's episodes and holding it thereafter.
 
 The replay buffer can be warm-started with pregenerated expert demonstrations before training begins. In the flagship configuration, 500,000 omniscient expert transitions are loaded into the buffer at initialization. This is important because the action space is large (\(n+1\) discrete actions) and terminal success rewards are sparse, making unguided exploration from scratch difficult.
 
@@ -212,42 +216,48 @@ Output: Trained Q-network Q(s, a; θ)
    - Q-network Q(s, a; θ) with random weights
    - Target network Q(s, a; θ⁻) ← θ
    - Replay buffer B with capacity N
-   - Load per-phase epsilon schedules: ε_start[], ε_decay[], ε_min[]
+   - Load epsilon schedules: one row per epoch of ε_start[], ε_decay[], ε_min[]
 
 2. Optional: Pre-fill B with expert demonstration transitions
 
-3. Set current_phase ← 1, env_steps ← 0
+3. Set segment ← (1, 1), env_steps ← 0, updates ← 0
 
-4. For each epoch:
+4. For each epoch k:
+   - Install row k of the epsilon schedules; ε ← ε_start[k][1]
    For each sample (noisy_codeword, original_codeword, phase, error_info) in D[train]:
 
-     a. Phase transition check:
-        If phase > current_phase:
-          - Save phase metrics, clear memory
-          - Update ε parameters: ε_start, ε_decay, ε_min ← schedules[phase]
-          - If epsilon_phase_reset: ε ← ε_start[phase]
-          - current_phase ← phase
+     a. Segment transition check:
+        If (k, phase) ≠ segment:
+          - Save the closing segment's metrics, clear memory
+          - Update ε parameters: ε_start, ε_decay, ε_min ← schedules[k][phase]
+          - If epsilon_phase_reset: ε ← ε_start[k][phase]
+          - segment ← (k, phase)
 
-     b. Initialize episode from sample
+     b. If auto_episodes: ε ← schedule(k, phase, index of this episode within the phase)
 
-     c. For each step until terminal:
-        i.   Select action aₜ:
-             - With probability ε: random action
-             - Otherwise: aₜ = argmax_a Q(sₜ, a; θ)
+     c. Initialize episode from sample
+
+     d. For each step until terminal:
+        i.   Obtain the legal actions L from the environment
+             (all n+1 actions, or all but the bit flipped at the previous step)
+             Select action aₜ:
+             - With probability ε: uniform over L
+             - Otherwise: aₜ = argmax_{a ∈ L} Q(sₜ, a; θ)
 
         ii.  Execute aₜ in environment, observe (sₜ₊₁, rₜ, done)
 
         iii. Store (sₜ, aₜ, rₜ, sₜ₊₁, done) in B
 
         iv.  env_steps ← env_steps + 1
-             If env_steps mod update_frequency = 0 and |B| ≥ batch_size:
+             If env_steps mod update_frequency = 0 and |B| ≥ min_replay_size:
                - Sample mini-batch from B
-               - Compute targets y = r + γ(1-d)·max_a' Q(s', a'; θ⁻)
+               - Compute targets y = r + γ(1-d)·max_a' Q(s', a'; θ⁻),
+                 excluding a' = a when the re-flip restriction is on
                - Update θ via gradient descent on MSE loss
-               - Decay ε according to current phase schedule
+               - Unless auto_episodes: decay ε according to the phase schedule
+               - updates ← updates + 1; if updates mod C = 0: θ⁻ ← θ
 
-        v.   If total training steps mod C = 0:
-               θ⁻ ← θ
+   - If save_epoch_checkpoints: write θ as the epoch-k checkpoint
 
 5. Return trained Q-network Q(s, a; θ)
 ```

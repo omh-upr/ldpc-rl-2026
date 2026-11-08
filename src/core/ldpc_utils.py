@@ -264,9 +264,13 @@ def verify_matrix_properties(H=None, G=None, verbose=True):
     orthogonality_product = np.dot(G, H.T) % 2
     results['orthogonal'] = np.all(orthogonality_product == 0)
 
-    # 3. Rank check
-    results['H_rank'] = np.linalg.matrix_rank(H.astype(float))
-    results['G_rank'] = np.linalg.matrix_rank(G.astype(float))
+    # 3. Rank check, over GF(2). Real-valued rank answers a different question and
+    # can disagree: rows 110, 101 and 011 are independent over the reals but sum to
+    # zero modulo 2, so their binary rank is 2 rather than 3.
+    from src.utils.gf2_operations import gf2_rank
+
+    results['H_rank'] = gf2_rank(H)
+    results['G_rank'] = gf2_rank(G)
     results['full_rank'] = (results['H_rank'] == m and results['G_rank'] == k)
 
     # 4. Matrix density (sparsity measure)

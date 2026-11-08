@@ -134,13 +134,17 @@ class MetricsManager:
             f.write(json.dumps(processed_data, default=self._json_serializer))
         return evaluation_path
 
-    def save_model(self, model_state_dict, model_info=None):
+    def save_model(self, model_state_dict, model_info=None, suffix=""):
         """
         Save model weights with metadata.
         
         Args:
             model_state_dict: PyTorch model state dictionary
             model_info: Additional model information
+            suffix: Appended to the file stem, before the extension. Empty
+                writes the run's own checkpoint, the one evaluation looks for.
+                A non-empty value writes alongside it without displacing it,
+                which is how intermediate snapshots are kept.
         """
         model_data = {
             "state_dict": model_state_dict,
@@ -152,7 +156,7 @@ class MetricsManager:
         }
         
         # Save model
-        model_path = self.models_dir / f"ldpc_rl_agent_{self.timestamp}.pth"
+        model_path = self.models_dir / f"ldpc_rl_agent_{self.timestamp}{suffix}.pth"
         torch.save(model_data, model_path)
         
         return model_path
@@ -188,13 +192,15 @@ class MetricsManager:
         else:
             raise TypeError(f"Object of type {type(obj)} is not JSON serializable: {obj!r}")
     
-    def save_training_partial(self, config: dict, training_data: list, phase: int, clear_memory: bool = False) -> Path:
+    def save_training_partial(self, config: dict, training_data: list, epoch: int,
+                              phase: int, clear_memory: bool = False) -> Path:
         """
-        Save partial training results for a specific phase to prevent memory accumulation.
+        Save partial training results for one (epoch, phase) segment.
 
         Args:
             config: Experiment configuration
-            training_data: Training episodes data for this phase
+            training_data: Training episodes data for this segment
+            epoch: Training epoch, 1-based
             phase: Curriculum phase number
             clear_memory: Deprecated, ignored. Callers should manage their own cleanup.
 
@@ -203,12 +209,13 @@ class MetricsManager:
         """
         partial_results = {
             'experiment_configuration': config,
+            'epoch': epoch,
             'curriculum_phase': phase,
             'training_episodes': training_data
         }
 
-        # Use phase-specific filename to avoid conflicts
-        partial_path = self.results_dir / f"{self.experiment_name}_{self.timestamp}_training_phase{phase}.json.gz"
+        # Segment-specific filename: phase alone is not unique across epochs
+        partial_path = self.results_dir / f"{self.experiment_name}_{self.timestamp}_training_epoch{epoch}_phase{phase}.json.gz"
         with gzip.open(partial_path, 'wt') as f:
             processed_data = self._preprocess_for_json(partial_results)
             # Encode once, write once. json.dump() streams the document through one
@@ -219,31 +226,34 @@ class MetricsManager:
         return partial_path
 
     def save_training_flush(self, config: dict, training_data: list,
-                            phase: int, flush_num: int) -> Path:
+                            epoch: int, phase: int, flush_num: int) -> Path:
         """
-        Save flush data immediately to disk within a training phase.
+        Save flush data immediately to disk within one (epoch, phase) segment.
 
         Called when memory limits are hit during training to prevent data loss.
-        Creates files with pattern: {experiment}_{timestamp}_training_phase{phase}_flush{N}.json.gz
+        Creates files with pattern:
+        {experiment}_{timestamp}_training_epoch{E}_phase{N}_flush{F}.json.gz
 
         Args:
             config: Experiment configuration
             training_data: Training episodes data for this flush
+            epoch: Training epoch, 1-based
             phase: Current curriculum phase number
-            flush_num: Sequential flush number within the phase
+            flush_num: Sequential flush number within the segment
 
         Returns:
             Path to the saved flush file
         """
         flush_results = {
             'experiment_configuration': config,
+            'epoch': epoch,
             'curriculum_phase': phase,
             'flush_number': flush_num,
             'training_episodes': training_data
         }
 
-        # Use phase and flush-specific filename
-        flush_path = self.results_dir / f"{self.experiment_name}_{self.timestamp}_training_phase{phase}_flush{flush_num}.json.gz"
+        # Segment and flush specific filename
+        flush_path = self.results_dir / f"{self.experiment_name}_{self.timestamp}_training_epoch{epoch}_phase{phase}_flush{flush_num}.json.gz"
         with gzip.open(flush_path, 'wt') as f:
             processed_data = self._preprocess_for_json(flush_results)
             # Encode once, write once. json.dump() streams the document through one
